@@ -1,0 +1,35 @@
+{
+  "files.exclude": {
+    "**/*.pyc": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true
+  },
+  "files.watcherExclude": {
+    "**/*.pyc": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true
+  },
+  "search.exclude": {
+    "**/*.pyc": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true
+  },
+  "[json]": {
+    "editor.formatOnSave": true
+  },
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  },
+  "ruff.lint.args": ["--extend-ignore", "F401"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+}

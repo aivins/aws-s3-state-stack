@@ -1,0 +1,34 @@
+[project]
+name = "aws-s3-state-stack"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Andrew Ivins",email = "andrew@ivins.id.au"}
+]
+readme = "README.md"
+requires-python = "~=3.8"
+dependencies = [
+    "cdktf (>=0.20.11,<0.21.0)",
+    "cdktf-cdktf-provider-aws (>=19.50.0,<19.51.0)",
+    "boto3 (>=1.36.2,<2.0.0)"
+]
+
+[project.entry-points."pytest11"]
+aws_s3_state_stack = "aws_s3_state_stack.pytest_plugin"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [
+    { include = "aws_s3_state_stack", from = "src" }
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+ipdb = "^0.13.13"
+
+[tool.pytest.ini_options]
+python_classes = "!Testing" 
+

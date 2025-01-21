@@ -1,0 +1,12 @@
+dist/
+imports/*
+!imports/__init__.py
+.terraform
+cdktf.out
+cdktf.log
+*terraform.*.tfstate*
+
+__pycache__
+
+# We ignore this because we generate it with contrib/vscode/init.sh
+.vscode
