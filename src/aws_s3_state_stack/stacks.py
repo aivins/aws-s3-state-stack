@@ -17,6 +17,7 @@ class AwsS3StateStack(TerraformStack):
         self.app_namespace = scope.node.get_all_context().get("name", "app")
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
+        self.ensure_backend_resources()
         self.register_provider()
         self.register_backend()
         self.build()
@@ -58,7 +59,6 @@ class AwsS3StateStack(TerraformStack):
         )
 
     def ensure_backend_resources(self):
-        breakpoint()
         s3 = self.boto3_session.resource("s3")
         dynamodb = self.boto3_session.resource("dynamodb")
         for bucket in s3.buckets.all():
