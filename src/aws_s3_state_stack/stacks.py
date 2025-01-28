@@ -14,7 +14,7 @@ class AwsS3StateStack(TerraformStack):
     ):
         super().__init__(scope, ns)
         self.boto3_session = boto3.Session()
-        self.app_namespace = scope.node.get_all_context().get("name", "app")
+        self.ns = ns
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
         self.ensure_backend_resources()
@@ -24,9 +24,7 @@ class AwsS3StateStack(TerraformStack):
 
     @property
     def s3_bucket_name(self):
-        return self._s3_bucket_name or "{}-tfstate".format(
-            self.app_namespace.replace("_", "-")
-        )
+        return self._s3_bucket_name or "{}-tfstate".format(self.ns.replace("_", "-"))
 
     @s3_bucket_name.setter
     def s3_bucket_name(self, value):
@@ -35,7 +33,7 @@ class AwsS3StateStack(TerraformStack):
     @property
     def dynamodb_table_name(self):
         return self._dynamodb_table_name or "{}Tfstate".format(
-            self.app_namespace.title().replace(" ", "")
+            self.ns.title().replace(" ", "")
         )
 
     @dynamodb_table_name.setter
