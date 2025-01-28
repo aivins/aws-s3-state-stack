@@ -2,6 +2,7 @@ from contextlib import contextmanager
 
 import pytest
 from cdktf import LocalBackend, Testing
+from moto import mock_aws
 
 from .stacks import AwsS3StateStack
 
@@ -24,11 +25,12 @@ def stack():
         )
 
         # Initialise our stack with the monkey patching in place
-        stack = stack_class(Testing.app(context={"name": "app"}), "stack")
-        try:
-            yield stack
-        finally:
-            monkeypatch.undo()
+        with mock_aws():
+            stack = stack_class(Testing.app(context={"name": "app"}), "stack")
+            try:
+                yield stack
+            finally:
+                monkeypatch.undo()
 
     return _stack
 

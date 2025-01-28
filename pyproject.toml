@@ -28,6 +28,7 @@ packages = [
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
 ipdb = "^0.13.13"
+moto = "^5.0.27"
 
 [tool.pytest.ini_options]
 python_classes = "!Testing" 
