@@ -1,8 +1,9 @@
 import boto3
 import pytest
 from moto import mock_aws
+from pydantic import BaseModel
 
-from aws_s3_state_stack.settings import AwsAppSettings, Settings
+from aws_s3_state_stack.settings import AwsAppSettings, Setting, Settings
 
 TEST_APP = "myapp"
 TEST_ENV = "dev"
@@ -71,5 +72,13 @@ def test_save_settings(settings, ssm):
     assert present("new_key")
     assert present("new_key1")
 
+
 def test_typed_settings():
-    class
+    with mock_aws():
+
+        class Settings(BaseModel):
+            hostname: Setting
+            password: Setting
+
+    settings = AwsAppSettings(TEST_APP, TEST_ENV, settings_type=Settings)
+    breakpoint()
