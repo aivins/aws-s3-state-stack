@@ -3,7 +3,7 @@
 from cdktf import App, TerraformOutput
 from cdktf_cdktf_provider_aws.instance import Instance
 
-from aws_s3_state_stack import AwsS3StateStack
+from aws_s3_state_stack.stacks import AwsS3StateStack
 
 
 class MyStack(AwsS3StateStack):
@@ -23,6 +23,6 @@ class MyStack(AwsS3StateStack):
 
 
 if __name__ == "__main__":
-    app = App()
+    app = App(context={"namespace": "aivinstest"})
     stack = MyStack(app, "test_stack")
     app.synth()

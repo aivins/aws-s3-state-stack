@@ -1,16 +1,17 @@
 from contextlib import contextmanager
 
 import pytest
-from cdktf import LocalBackend, Testing
 from moto import mock_aws
-
-from .stacks import AwsS3StateStack
 
 
 @pytest.fixture(scope="module")
 def stack():
     @contextmanager
     def _stack(stack_class):
+        from cdktf import LocalBackend, Testing
+
+        from .stacks import AwsS3StateStack
+
         assert issubclass(stack_class, AwsS3StateStack)
 
         monkeypatch = pytest.MonkeyPatch()
@@ -26,7 +27,7 @@ def stack():
 
         # Initialise our stack with the monkey patching in place
         with mock_aws():
-            stack = stack_class(Testing.app(context={"name": "app"}), "stack")
+            stack = stack_class(Testing.app(context={"namespace": "app"}), "stack")
             try:
                 yield stack
             finally:
@@ -39,6 +40,8 @@ def stack():
 def synthesized(stack):
     @contextmanager
     def _synthesized(stack_class):
+        from cdktf import Testing
+
         nonlocal stack
         with stack(stack_class) as stack:
             yield Testing.synth(stack)
@@ -50,6 +53,8 @@ def synthesized(stack):
 def fully_synthesized(stack):
     @contextmanager
     def _fully_synthesized(stack_class):
+        from cdktf import Testing
+
         nonlocal stack
         with stack(stack_class) as stack:
             yield Testing.full_synth(stack)
