@@ -1,5 +1,4 @@
-import os
-from typing import Tuple, Type
+from typing import List, Tuple, Type
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -26,15 +25,39 @@ class VpcSetting(Setting):
 
 
 class SubnetsSetting(Setting):
-    value: str = Field(default_factory=default_subnet_ids)
+    value: List[str] = Field(default_factory=default_subnet_ids)
 
 
 class PrivateSubnetsSetting(Setting):
-    value: str = Field(default_factory=default_private_subnet_ids)
+    value: List[str] = Field(default_factory=default_private_subnet_ids)
 
 
 class PubliceSubnetsSetting(Setting):
-    value: str = Field(default_factory=default_public_subnet_ids)
+    value: List[str] = Field(default_factory=default_public_subnet_ids)
+
+
+def vpc_field(description="VPC ID", **kwargs):
+    return VpcSetting(description=description, **kwargs)
+
+
+def subnets_field(description="Subnet IDs", **kwargs):
+    return SubnetsSetting(description=description, **kwargs)
+
+
+# def vpc_field(description="VPC ID"):
+#     return Setting(Field(default_factory=default_vpc_id), description)
+
+
+# def subnets_field(description="Subnet IDs"):
+#     return Setting(Field(default_factory=default_subnet_ids))
+
+
+# def private_subnets_field():
+#     return Field(default_factory=default_private_subnet_ids)
+
+
+# def public_subnets_field():
+#     return Field(default_factory=default_public_subnet_ids)
 
 
 class UserInputSettingsSource(PydanticBaseSettingsSource):
@@ -157,8 +180,8 @@ class AwsAppSettings(AppSettings):
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         sources = [init_settings, ParameterStoreSettingsSource(settings_cls)]
-        if not os.environ.get("CI", False):
-            sources.append(UserInputSettingsSource(settings_cls))
+        # if not os.environ.get("CI", False):
+        #     sources.append(UserInputSettingsSource(settings_cls))
         return tuple(sources)
 
     def save(self):
