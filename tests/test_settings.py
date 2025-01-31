@@ -38,56 +38,59 @@ def settings(ssm):
 
 
 def test_aws_namespace(settings):
-    breakpoint()
     assert settings.namespace == f"/{TEST_APP}/{TEST_ENV}"
-    breakpoint()
 
 
-# def test_fetch_all_settings(settings):
-#     all_settings = settings.get_all()
-#     assert len(all_settings) == 3
-#     assert all_settings["foo"].value == "valueforfoo"
-#     assert str(all_settings["foo"]) == "valueforfoo"
+def test_settings(settings):
+    assert settings.foo.value == "valueforfoo"
+    assert settings.foo.description == "Some description"
 
 
-# def test_get_setting(settings):
-#     assert settings.get("bar").value == "true"
-#     assert str(settings.get("bar")) == "true"
+def test_set_setting(settings):
+    settings.set("foo", "there", "Just some setting")
+    assert settings.foo.value == "there"
+    assert settings.foo.description == "Just some setting"
 
 
-# def test_set_setting(settings):
-#     settings.set("hello", "there", "Just some setting")
-#     setting = settings.get("hello")
-#     setting.value == "there"
-#     setting.description == "Just some setting"
+def test_set_empty_key(settings):
+    with pytest.raises(Exception, match="Cannot set an empty key"):
+        settings.set("", "blah")
 
 
-# def test_set_bad_key(settings):
-#     with pytest.raises(Exception, match="Cannot set an empty key"):
-#         settings.set("", "blah")
+def test_set_invalid_key(settings):
+    with pytest.raises(Exception, match="not a field"):
+        settings.set("badkey", "blah")
 
 
-# def test_save_settings(settings, ssm):
-#     settings.set("new_key", "new_value")
-#     settings.set("new_key1", "new_value2")
-#     settings.save()
-#     response = ssm.get_parameters_by_path(Path=settings.namespace, Recursive=True)
-#     params = response["Parameters"]
+def test_user_input(monkeypatch):
+    inputs = iter(["valueforblah", "This is very blah"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+    with mock_aws():
 
-#     def present(key):
-#         return any(x["Name"] == settings.full_key(key) for x in params)
+        class TestSettings(AwsAppSettings):
+            blah: Setting
 
-#     assert present("foo")
-#     assert present("new_key")
-#     assert present("new_key1")
+        settings = TestSettings("anotherapp", TEST_ENV)
+        assert settings.blah.value == "valueforblah"
+        assert settings.blah.description == "This is very blah"
 
 
-# def test_typed_settings():
-#     with mock_aws():
+def test_save_settings(ssm):
+    with mock_aws():
 
-#         class Settings(BaseModel):
-#             hostname: Setting
-#             password: Setting
+        class TestSettings(AwsAppSettings):
+            blah: Setting
 
-#     settings = AwsAppSettings(TEST_APP, TEST_ENV, settings_type=Settings)
-#     breakpoint()
+        settings = TestSettings(
+            "anotherapp", TEST_ENV, blah=Setting(key="blah", value="bloh")
+        )
+
+        settings.save()
+
+        response = ssm.get_parameters_by_path(Path=settings.namespace, Recursive=True)
+        params = response["Parameters"]
+
+        def present(key):
+            return any(x["Name"].endswith(f"/{key}") for x in params)
+
+        assert present("blah")

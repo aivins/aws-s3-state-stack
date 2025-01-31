@@ -1,27 +1,12 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, Tuple, Type, TypedDict
+import os
+from typing import Tuple, Type
 
 import boto3
-import botocore.client
-from pydantic import BaseModel, PrivateAttr, computed_field
+from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
-    InitSettingsSource,
     PydanticBaseSettingsSource,
-    SettingsConfigDict,
 )
-
-# @dataclass
-# class Setting:
-#     namespace: str
-#     key: str
-#     value: str
-#     description: str = ""
-#     required: bool = False
-
-#     def __str__(self) -> str:
-#         return self.value
 
 
 class Setting(BaseModel):
@@ -30,12 +15,39 @@ class Setting(BaseModel):
     description: str = ""
 
 
-class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
+class UserInputSettingsSource(PydanticBaseSettingsSource):
     def get_field_value(self, field, field_name):
-        breakpoint()
+        if field.exclude:
+            return None, "", False
+        value = input("  Enter field value: ")
+        description = input("  Enter field description: ")
+        return (
+            Setting(key=field_name, value=value, description=description),
+            field_name,
+            True,
+        )
 
     def __call__(self):
-        session = self.settings_sources_data["InitSettingsSource"]["_session"]
+        settings = self.settings_sources_data["ParameterStoreSettingsSource"]
+        for field_name, field in self.settings_cls.model_fields.items():
+            if field_name in settings:
+                continue
+            field_value, field_key, value_is_complex = self.get_field_value(
+                field, field_name
+            )
+            if field_key:
+                settings[field_key] = field_value
+        return settings
+
+
+class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._settings = None
+
+    def fetch_settings(self):
+        settings = self.settings_sources_data["InitSettingsSource"]
+        session = settings["session"]
         ssm = session.client("ssm")
         namespace = self.settings_sources_data["InitSettingsSource"]["namespace"]
         response = ssm.describe_parameters(
@@ -52,24 +64,44 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         descriptions = {p["Name"]: p["Description"] for p in response["Parameters"]}
         response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
         params = response.get("Parameters", [])
-        settings = {}
         for param in params:
             description = descriptions[param["Name"]]
             key = param["Name"][len(namespace) + 1 :]
+            value = param["Value"]
+            if key in settings:
+                continue
             if key in self.settings_cls.model_fields:
-                settings[key] = Setting(
-                    key=key, value=param["Value"], description=description
-                )
+                settings[key] = Setting(key=key, value=value, description=description)
+        return settings
+
+    def get_field_value(self, field, field_name):
+        if not self._settings:
+            self._settings = self.fetch_settings()
+        if field.exclude or field_name not in self._settings:
+            return None, "", False
+
+        return (
+            self._settings[field_name],
+            field_name,
+            True,
+        )
+
+    def __call__(self):
+        settings = {}
+        for field_name, field in self.settings_cls.model_fields.items():
+            field_value, field_key, value_is_complex = self.get_field_value(
+                field, field_name
+            )
+            if field_key:
+                settings[field_key] = field_value
         return settings
 
 
 class AppSettings(BaseSettings):
-    model_config = {
-        "extra": "allow",
-    }
-    app: str
-    environment: str
-    namespace: str
+    model_config = {"extra": "allow"}
+    app: str = Field(exclude=True)
+    environment: str = Field(exclude=True)
+    namespace: str = Field(exclude=True)
 
     def __init__(self, app: str, environment: str, **kwargs):
         namespace = f"/{app}/{environment}"
@@ -79,125 +111,45 @@ class AppSettings(BaseSettings):
             environment=environment,
             **kwargs,
         )
-        # self._namespace = namespace
 
-    # def _get(self, key: str) -> Setting:
-    #     return getattr(self, key)
+    def set(self, key, value, description=""):
+        key = key.strip()
+        if not key:
+            raise Exception("Cannot set an empty key")
+        if key not in self.model_fields:
+            raise Exception(f"{key} is not a field on {self.__class__.__name__}")
+        setattr(self, key, Setting(key=key, value=value, description=description))
 
-    # def _set(self, key: str, **data):
-    #     return setattr(self, key, data)
-
-    # def get(self, key: str) -> Setting:
-    #     return self._get(key)
-
-    # def set(self, key: str, **data) -> None:
-    #     self._set(key, **data)
-
-    # def __getattr__(self, key: str) -> Any:
-    #     if key in self.model_fields.keys():
-    #         return super().__getattr__(key)
-    #     return super().__getattr__(key)
-
-    # def __setattr__(self, key: str, value: Any) -> Any:
-    #     if key in self.model_fields.keys():
-    #         return super().__setattr__(key, value)
-    #     return super().__setattr__(key, value)
-
-    # @abstractmethod
-    # def _get(self, key: str) -> Setting:
-    #     pass
-
-    # @abstractmethod
-    # def _set(self, key: str, value: str) -> None:
-    #     pass
-
-    # @abstractmethod
-    # def _get_all(self) -> Settings:
-    #     pass
-
-    # @abstractmethod
-    # def _save(self) -> None:
-    #     pass
-
-    # def get(self, key: str) -> Setting:
-    #     return self._get(key)
-
-    # def set(self, key: str) -> Setting:
-    #     return self._set(key)
-
-    # def get_all(self) -> Settings:
-    #     return self._get_all()
-
-    # def save(self) -> None:
-    #     self._save()
+    def save(self):
+        pass
 
 
 class AwsAppSettings(AppSettings):
-    _session: boto3.Session
+    session: boto3.Session = Field(exclude=True)
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, _session=boto3.Session(), **kwargs)
+        super().__init__(*args, session=boto3.Session(), **kwargs)
 
     @classmethod
     def settings_customise_sources(
         cls,
         settings_cls: Type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
+        *args,
+        **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, ParameterStoreSettingsSource(settings_cls))
+        sources = [init_settings, ParameterStoreSettingsSource(settings_cls)]
+        if not os.environ.get("CI", False):
+            sources.append(UserInputSettingsSource(settings_cls))
+        return tuple(sources)
 
-
-# class AwsAppSettings(AppSettings):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.session = boto3.Session()
-#         self.ssm = self.session.client("ssm")
-
-#     @property
-#     def namespace(self) -> str:
-#         return f"/{self.app}/{self.environment}"
-
-#     def full_key(self, key: str) -> str:
-#         return f"{self.namespace}/{key}"
-
-#     def setting_from_parameter(self, param: dict) -> Setting:
-#         key: str = param["Name"][len(self.namespace) + 1 :]
-#         return Setting(
-#             self.namespace, key, param["Value"], param.get("Description", "")
-#         )
-
-#     def _get(self, key: str) -> Setting:
-#         if key in self._settings:
-#             return self._settings[key]
-#         response = self.ssm.get_parameter(Name=self.full_key(key))
-#         return self.setting_from_parameter(response["Parameter"])
-
-#     def _get_all(self) -> Settings:
-#         if self._settings:
-#             return self._settings
-#         response = self.ssm.get_parameters_by_path(Path=self.namespace, Recursive=True)
-#         params = response.get("Parameters", [])
-#         for param in params:
-#             setting = self.setting_from_parameter(param)
-#             self._settings[setting.key] = setting
-#         return self._settings
-
-#     def _set(self, key, value, description=""):
-#         key = key.strip()
-#         if not key:
-#             raise Exception("Cannot set an empty key")
-#         self._settings[key] = Setting(self.namespace, key, value, description)
-
-#     def _save(self):
-#         for key, setting in self._settings.items():
-#             full_key = self.full_key(key)
-#             self.ssm.put_parameter(
-#                 Type="String",
-#                 Name=full_key,
-#                 Value=setting.value,
-#                 Description=setting.description,
-#                 Overwrite=True,
-#             )
+    def save(self):
+        ssm = self.session.client("ssm")
+        for key, setting in self.model_dump().items():
+            full_key = f"{self.namespace}/{key}"
+            ssm.put_parameter(
+                Type="String",
+                Name=full_key,
+                Value=setting["value"],
+                Description=setting["description"],
+            )
