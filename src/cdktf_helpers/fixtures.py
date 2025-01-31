@@ -27,7 +27,7 @@ def stack():
 
         # Initialise our stack with the monkey patching in place
         with mock_aws():
-            stack = stack_class(Testing.app(context={"namespace": "app"}), "stack")
+            stack = stack_class(Testing.app(), "stack")
             try:
                 yield stack
             finally:

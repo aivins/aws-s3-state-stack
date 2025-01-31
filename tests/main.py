@@ -3,7 +3,7 @@
 from cdktf import App, TerraformOutput
 from cdktf_cdktf_provider_aws.instance import Instance
 
-from aws_s3_state_stack.stacks import AwsS3StateStack
+from cdktf_helpers.stacks import AwsS3StateStack
 
 
 class MyStack(AwsS3StateStack):

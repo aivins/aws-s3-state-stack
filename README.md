@@ -13,7 +13,7 @@ Requires an working AWS CLI session in the environment it is run. `cdktf deploy`
 from cdktf import App, TerraformOutput
 from cdktf_cdktf_provider_aws.instance import Instance
 
-from aws_s3_state_stack import AwsS3StateStack
+from cdktf_helpers import AwsS3StateStack
 
 
 class MyStack(AwsS3StateStack):

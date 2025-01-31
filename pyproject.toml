@@ -1,5 +1,5 @@
 [project]
-name = "aws-s3-state-stack"
+name = "cdktf-helpers"
 version = "0.1.0"
 description = ""
 authors = [
@@ -16,10 +16,10 @@ dependencies = [
 ]
 
 [project.entry-points."pytest11"]
-aws_s3_state_stack = "aws_s3_state_stack.pytest_plugin"
+cdktf_helpers = "cdktf_helpers.pytest_plugin"
 
 [project.scripts]
-create-backend-resources = "aws_s3_state_stack.backends:create_backend_resources"
+create-backend-resources = "cdktf_helpers.backends:create_backend_resources"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -27,7 +27,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [
-    { include = "aws_s3_state_stack", from = "src" }
+    { include = "cdktf_helpers", from = "src" }
 ]
 
 [tool.poetry.group.dev.dependencies]

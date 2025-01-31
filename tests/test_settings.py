@@ -3,13 +3,11 @@ import pytest
 from moto import mock_aws
 from pydantic import BaseModel
 
-from aws_s3_state_stack.settings import (
+from cdktf_helpers.settings import (
     AwsAppSettings,
     Setting,
-    # VpcSetting,
-    # SubnetsSetting,
-    subnets_field,
-    vpc_field,
+    SubnetsSetting,
+    VpcSetting,
 )
 
 TEST_APP = "myapp"
@@ -117,7 +115,7 @@ def test_vpc_setting():
     with mock_aws():
 
         class Settings(BaseModel):
-            vpc: Setting = vpc_field()
+            vpc: VpcSetting = VpcSetting()
 
         settings = Settings()
 
@@ -128,8 +126,8 @@ def test_subnets_setting():
     with mock_aws():
 
         class Settings(BaseModel):
-            vpc: Setting = vpc_field()
-            subnets: Setting = subnets_field()
+            vpc: VpcSetting = VpcSetting()
+            subnets: SubnetsSetting = SubnetsSetting()
 
         settings = Settings()
         assert all(value.startswith("subnet-") for value in settings.subnets.value)

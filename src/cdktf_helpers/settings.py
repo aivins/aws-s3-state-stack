@@ -36,30 +36,6 @@ class PubliceSubnetsSetting(Setting):
     value: List[str] = Field(default_factory=default_public_subnet_ids)
 
 
-def vpc_field(description="VPC ID", **kwargs):
-    return VpcSetting(description=description, **kwargs)
-
-
-def subnets_field(description="Subnet IDs", **kwargs):
-    return SubnetsSetting(description=description, **kwargs)
-
-
-# def vpc_field(description="VPC ID"):
-#     return Setting(Field(default_factory=default_vpc_id), description)
-
-
-# def subnets_field(description="Subnet IDs"):
-#     return Setting(Field(default_factory=default_subnet_ids))
-
-
-# def private_subnets_field():
-#     return Field(default_factory=default_private_subnet_ids)
-
-
-# def public_subnets_field():
-#     return Field(default_factory=default_public_subnet_ids)
-
-
 class UserInputSettingsSource(PydanticBaseSettingsSource):
     def get_field_value(self, field, field_name):
         if field.exclude:
