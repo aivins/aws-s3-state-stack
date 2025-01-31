@@ -6,27 +6,32 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from constructs import Construct
 
 from .backends import AutoS3Backend
+from .settings import AwsAppSettings
 from .utils import unique_name
+
+default_settings = AwsAppSettings("app", "environment")
 
 
 class AwsS3StateStack(TerraformStack):
     def __init__(
-        self, scope: Construct, id: str, s3_bucket_name=None, dynamodb_table_name=None
+        self,
+        scope: Construct,
+        id: str,
+        s3_bucket_name=None,
+        dynamodb_table_name=None,
+        create_state_resources=False,
     ):
         super().__init__(scope, id)
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
+        self._create_state_resources = create_state_resources
 
-        # Get the app details from the context. We allow defaults here only for
-        # unit tests, where they cannot be easily set
-        self.app = self.node.try_get_context("app") or "app"
-        self.environment = self.node.try_get_context("environment") or "environment"
-        self.namespace = (
-            self.node.try_get_context("namespace") or f"/{self.app}/{self.environment}"
-        )
+        # Extract AwsSettingsObject from the context
+        # Defaults should only be used in unit tests
+        self.settings = self.node.try_get_context("settings") or default_settings
 
         # Hash a reasonably unique name for use as a bucket and dynamodb name for TF state
-        self.unique_name = unique_name(self.app)
+        self.unique_name = unique_name(self.settings.app)
 
         # Initialise the provider and the backend, which may create
         # resources to store TF state
@@ -75,4 +80,5 @@ class AwsS3StateStack(TerraformStack):
             dynamodb_table=self.dynamodb_table_name,
             key=key,
             region=self.boto3_session.region_name,
+            create_state_resources=self._create_state_resources,
         )

@@ -124,8 +124,8 @@ class AppSettings(BaseSettings):
     environment: str = Field(exclude=True)
     namespace: str = Field(exclude=True)
 
-    def __init__(self, app: str, environment: str, **kwargs):
-        namespace = f"/{app}/{environment}"
+    def __init__(self, app: str, environment: str, namespace: str = None, **kwargs):
+        namespace = f"/{app}/{environment}" if not namespace else namespace
         super().__init__(
             namespace=namespace,
             app=app,
@@ -162,11 +162,13 @@ class AwsAppSettings(AppSettings):
 
     def save(self):
         ssm = boto3_session().client("ssm")
-        for key, setting in self.model_dump().items():
+        fields = [k for k, f in self.model_fields.items() if not f.exclude]
+        for key in fields:
+            setting = getattr(self, key)
             full_key = f"{self.namespace}/{key}"
             ssm.put_parameter(
                 Type="String",
                 Name=full_key,
-                Value=setting["value"],
-                Description=setting["description"],
+                Value=setting.value,
+                Description=setting.description,
             )

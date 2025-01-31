@@ -17,6 +17,6 @@ def test_aws_app_settings():
 
         settings = Settings("myapp", "dev")
         app = AwsApp(settings)
-        context = app.node.get_all_context()
+        context = app.node.get_all_context()["settings"]
         assert context["vpc_id"]["value"].startswith("vpc-")
         assert all(value.startswith("subnet-") for value in context["subnets"]["value"])

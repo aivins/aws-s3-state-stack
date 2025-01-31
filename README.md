@@ -1,4 +1,4 @@
-# aws-s3-state-stack
+# CDKTF Helpers 
 
 Experimental CDKTF Stack that automatically registers an AWS Provider and and S3Backend with DynamoDB locking. It can even create these automatically, which might be a really bad idea in real life but was an interesting experiment all the same.
 
