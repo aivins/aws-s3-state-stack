@@ -1,18 +1,40 @@
 import os
 from typing import Tuple, Type
 
-import boto3
 from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
 )
 
+from .aws import (
+    boto3_session,
+    default_private_subnet_ids,
+    default_public_subnet_ids,
+    default_subnet_ids,
+    default_vpc_id,
+)
+
 
 class Setting(BaseModel):
-    key: str
     value: str
     description: str = ""
+
+
+class VpcSetting(Setting):
+    value: str = Field(default_factory=default_vpc_id)
+
+
+class SubnetsSetting(Setting):
+    value: str = Field(default_factory=default_subnet_ids)
+
+
+class PrivateSubnetsSetting(Setting):
+    value: str = Field(default_factory=default_private_subnet_ids)
+
+
+class PubliceSubnetsSetting(Setting):
+    value: str = Field(default_factory=default_public_subnet_ids)
 
 
 class UserInputSettingsSource(PydanticBaseSettingsSource):
@@ -22,7 +44,7 @@ class UserInputSettingsSource(PydanticBaseSettingsSource):
         value = input("  Enter field value: ")
         description = input("  Enter field description: ")
         return (
-            Setting(key=field_name, value=value, description=description),
+            field.annotation(value=value, description=description),
             field_name,
             True,
         )
@@ -46,9 +68,8 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         self._settings = None
 
     def fetch_settings(self):
+        ssm = boto3_session().client("ssm")
         settings = self.settings_sources_data["InitSettingsSource"]
-        session = settings["session"]
-        ssm = session.client("ssm")
         namespace = self.settings_sources_data["InitSettingsSource"]["namespace"]
         response = ssm.describe_parameters(
             ParameterFilters=[
@@ -71,7 +92,8 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
             if key in settings:
                 continue
             if key in self.settings_cls.model_fields:
-                settings[key] = Setting(key=key, value=value, description=description)
+                field = self.settings_cls.model_fields[key]
+                settings[key] = field.annotation(value=value, description=description)
         return settings
 
     def get_field_value(self, field, field_name):
@@ -118,18 +140,14 @@ class AppSettings(BaseSettings):
             raise Exception("Cannot set an empty key")
         if key not in self.model_fields:
             raise Exception(f"{key} is not a field on {self.__class__.__name__}")
-        setattr(self, key, Setting(key=key, value=value, description=description))
+        field = self.model_fields[key]
+        setattr(self, key, field.annotation(value=value, description=description))
 
     def save(self):
         pass
 
 
 class AwsAppSettings(AppSettings):
-    session: boto3.Session = Field(exclude=True)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, session=boto3.Session(), **kwargs)
-
     @classmethod
     def settings_customise_sources(
         cls,
@@ -144,7 +162,7 @@ class AwsAppSettings(AppSettings):
         return tuple(sources)
 
     def save(self):
-        ssm = self.session.client("ssm")
+        ssm = boto3_session().client("ssm")
         for key, setting in self.model_dump().items():
             full_key = f"{self.namespace}/{key}"
             ssm.put_parameter(

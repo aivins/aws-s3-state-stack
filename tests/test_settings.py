@@ -3,7 +3,12 @@ import pytest
 from moto import mock_aws
 from pydantic import BaseModel
 
-from aws_s3_state_stack.settings import AwsAppSettings, Setting
+from aws_s3_state_stack.settings import (
+    AwsAppSettings,
+    Setting,
+    SubnetsSetting,
+    VpcSetting,
+)
 
 TEST_APP = "myapp"
 TEST_ENV = "dev"
@@ -35,6 +40,16 @@ def settings(ssm):
         other: Setting
 
     yield TestSettings(app=TEST_APP, environment=TEST_ENV)
+
+
+@pytest.fixture(scope="module")
+def vpc_and_subnets():
+    with mock_aws():
+        session = boto3.Session()
+        ec2 = session.resource("ec2")
+        vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")
+        subnets = [vpc.create_subnet(CidrBlock=f"10.0.{i}.0/25") for i in range(3)]
+        yield vpc, subnets
 
 
 def test_aws_namespace(settings):
@@ -94,3 +109,15 @@ def test_save_settings(ssm):
             return any(x["Name"].endswith(f"/{key}") for x in params)
 
         assert present("blah")
+
+
+def test_vpc_setting():
+    with mock_aws():
+        setting = VpcSetting()
+        assert setting.value.startswith("vpc-")
+
+
+def test_subnets_setting():
+    with mock_aws():
+        setting = SubnetsSetting()
+        assert all(value.startswith("subnet-") for value in setting.value)
