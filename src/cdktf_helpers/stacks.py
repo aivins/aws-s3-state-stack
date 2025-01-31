@@ -15,7 +15,6 @@ class AwsS3StateStack(TerraformStack):
         self,
         scope: Construct,
         id: str,
-        settings,
         s3_bucket_name=None,
         dynamodb_table_name=None,
         create_state_resources=False,
@@ -24,7 +23,6 @@ class AwsS3StateStack(TerraformStack):
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
         self._create_state_resources = create_state_resources
-        self.settings = settings
 
         # Hash a reasonably unique name for use as a bucket and dynamodb name for TF state
         self.unique_name = unique_name(self.settings.app)
@@ -61,6 +59,14 @@ class AwsS3StateStack(TerraformStack):
     @property
     def s3_key(self):
         return self.settings.environment
+
+    @property
+    def settings(self):
+        if hasattr(self.node.root, "settings"):
+            return self.node.root.settings
+        else:
+            # This is missing in tests
+            return AwsAppSettings("app", "dev")
 
     def build(self):
         pass

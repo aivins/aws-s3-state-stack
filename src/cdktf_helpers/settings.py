@@ -1,6 +1,9 @@
-from typing import List, Tuple, Type
+import os
+import re
+from typing import List, Tuple, Type, get_origin
 
 from pydantic import BaseModel, Field
+from pydantic_core import PydanticUndefined
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -22,39 +25,59 @@ class Setting(BaseModel):
 
 class VpcSetting(Setting):
     value: str = Field(default_factory=default_vpc_id)
+    description: str = "VPC ID"
 
 
 class SubnetsSetting(Setting):
     value: List[str] = Field(default_factory=default_subnet_ids)
+    description: str = "Subnet IDs"
 
 
 class PrivateSubnetsSetting(Setting):
     value: List[str] = Field(default_factory=default_private_subnet_ids)
+    description: str = "Private Subnet IDs"
 
 
 class PubliceSubnetsSetting(Setting):
     value: List[str] = Field(default_factory=default_public_subnet_ids)
+    description: str = "Public Subnet IDs"
 
 
 class UserInputSettingsSource(PydanticBaseSettingsSource):
-    def get_field_value(self, field, field_name):
-        if field.exclude:
-            return None, "", False
-        value = input("  Enter field value: ")
-        description = input("  Enter field description: ")
+    def get_field_value(self, field, field_name, setting):
+        default_value = setting.value
+        description = None
+
+        if field.default is not PydanticUndefined:
+            default_value = default_value or field.default.value
+            description = field.default.description
+
+        if description is None:
+            description_field = field.annotation.model_fields["description"]
+            if description_field.default:
+                description = description_field.default
+
+        value = None
+        while not value:
+            default_msg = f" [{default_value}]" if default_value is not None else ""
+            field_id = f"{description} ({field_name})" if description else field_name
+            value = input(f"{field_id}{default_msg}: ")
+            if not value and default_value:
+                value = default_value
         return (
-            field.annotation(value=value, description=description),
+            field.annotation(value=value, description=description or ""),
             field_name,
             True,
         )
 
     def __call__(self):
-        settings = self.settings_sources_data["ParameterStoreSettingsSource"]
+        source = self.settings_sources_data["ParameterStoreSettingsSource"]
+        settings = {}
         for field_name, field in self.settings_cls.model_fields.items():
-            if field_name in settings:
+            if field.exclude:
                 continue
             field_value, field_key, value_is_complex = self.get_field_value(
-                field, field_name
+                field, field_name, source[field_name]
             )
             if field_key:
                 settings[field_key] = field_value
@@ -68,8 +91,8 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
 
     def fetch_settings(self):
         ssm = boto3_session().client("ssm")
-        settings = self.settings_sources_data["InitSettingsSource"]
-        namespace = self.settings_sources_data["InitSettingsSource"]["namespace"]
+        source = self.settings_sources_data["InitSettingsSource"]
+        namespace = source["namespace"]
         response = ssm.describe_parameters(
             ParameterFilters=[
                 {
@@ -81,17 +104,25 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
                 },
             ]
         )
-        descriptions = {p["Name"]: p["Description"] for p in response["Parameters"]}
+        descriptions = {
+            p["Name"]: p.get("Description", "") for p in response["Parameters"]
+        }
         response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
         params = response.get("Parameters", [])
+        settings = {}
         for param in params:
             description = descriptions[param["Name"]]
             key = param["Name"][len(namespace) + 1 :]
             value = param["Value"]
-            if key in settings:
+            if key in source:
                 continue
             if key in self.settings_cls.model_fields:
                 field = self.settings_cls.model_fields[key]
+                if (
+                    get_origin(field.annotation.model_fields["value"].annotation)
+                    is list
+                ):
+                    value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
                 settings[key] = field.annotation(value=value, description=description)
         return settings
 
@@ -155,10 +186,7 @@ class AwsAppSettings(AppSettings):
         *args,
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        sources = [init_settings, ParameterStoreSettingsSource(settings_cls)]
-        # if not os.environ.get("CI", False):
-        #     sources.append(UserInputSettingsSource(settings_cls))
-        return tuple(sources)
+        return (init_settings, ParameterStoreSettingsSource(settings_cls))
 
     def save(self):
         ssm = boto3_session().client("ssm")
@@ -166,9 +194,14 @@ class AwsAppSettings(AppSettings):
         for key in fields:
             setting = getattr(self, key)
             full_key = f"{self.namespace}/{key}"
+            if isinstance(setting.value, list):
+                value = ",".join([v.replace(",", "\,") for v in setting.value])
+            else:
+                value = setting.value
             ssm.put_parameter(
                 Type="String",
                 Name=full_key,
-                Value=setting.value,
+                Value=value,
                 Description=setting.description,
+                Overwrite=True,
             )
