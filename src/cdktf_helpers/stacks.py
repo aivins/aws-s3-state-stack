@@ -66,7 +66,7 @@ class AwsS3StateStack(TerraformStack):
             return self.node.root.settings
         else:
             # This is missing in tests
-            return AwsAppSettings("app", "dev")
+            return AwsAppSettings(app="app", environment="dev")
 
     def build(self):
         pass

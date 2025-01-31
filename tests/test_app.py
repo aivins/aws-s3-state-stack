@@ -15,7 +15,7 @@ def test_aws_app_settings():
             vpc_id: VpcSetting = VpcSetting()
             subnets: SubnetsSetting = SubnetsSetting()
 
-        settings = Settings("myapp", "dev")
+        settings = Settings(app="myapp", environment="dev")
         app = AwsApp(settings)
 
         assert app.settings.vpc_id.value.startswith("vpc-")

@@ -77,19 +77,6 @@ def test_set_invalid_key(settings):
         settings.set("badkey", "blah")
 
 
-# def test_user_input(monkeypatch):
-#     inputs = iter(["valueforblah", "This is very blah"])
-#     monkeypatch.setattr("builtins.input", lambda _: next(inputs))
-#     with mock_aws():
-
-#         class TestSettings(AwsAppSettings):
-#             blah: Setting
-
-#         settings = TestSettings("anotherapp", TEST_ENV)
-#         assert settings.blah.value == "valueforblah"
-#         assert settings.blah.description == "This is very blah"
-
-
 def test_save_settings(ssm):
     with mock_aws():
 
@@ -97,7 +84,9 @@ def test_save_settings(ssm):
             blah: Setting
 
         settings = TestSettings(
-            "anotherapp", TEST_ENV, blah=Setting(key="blah", value="bloh")
+            app="anotherapp",
+            environment=TEST_ENV,
+            blah=Setting(key="blah", value="bloh"),
         )
 
         settings.save()

@@ -28,7 +28,7 @@ def stack():
 
         # Initialise our stack with the monkey patching in place
         with mock_aws():
-            settings = AwsAppSettings("app", "dev")
+            settings = AwsAppSettings(app="app", environment="dev")
             stack = stack_class(Testing.app(), "stack", settings)
             try:
                 yield stack

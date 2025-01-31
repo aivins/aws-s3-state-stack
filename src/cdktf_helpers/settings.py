@@ -2,7 +2,7 @@ import os
 import re
 from typing import List, Tuple, Type, get_origin
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from pydantic_core import PydanticUndefined
 from pydantic_settings import (
     BaseSettings,
@@ -92,7 +92,9 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
     def fetch_settings(self):
         ssm = boto3_session().client("ssm")
         source = self.settings_sources_data["InitSettingsSource"]
-        namespace = source["namespace"]
+        namespace = self.settings_cls.format_namespace(
+            source["app"], source["environment"]
+        )
         response = ssm.describe_parameters(
             ParameterFilters=[
                 {
@@ -151,18 +153,16 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
 
 class AppSettings(BaseSettings):
     model_config = {"extra": "allow"}
-    app: str = Field(exclude=True)
-    environment: str = Field(exclude=True)
-    namespace: str = Field(exclude=True)
+    app: str = Field(exclude=True, default="app")
+    environment: str = Field(exclude=True, default="dev")
 
-    def __init__(self, app: str, environment: str, namespace: str = None, **kwargs):
-        namespace = f"/{app}/{environment}" if not namespace else namespace
-        super().__init__(
-            namespace=namespace,
-            app=app,
-            environment=environment,
-            **kwargs,
-        )
+    @computed_field
+    def namespace(self) -> str:
+        return self.format_namespace(self.app, self.environment)
+
+    @classmethod
+    def format_namespace(cls, app: str, environment: str) -> str:
+        return f"/{app}/{environment}"
 
     def set(self, key, value, description=""):
         key = key.strip()
