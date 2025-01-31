@@ -10,6 +10,7 @@ def stack():
     def _stack(stack_class):
         from cdktf import LocalBackend, Testing
 
+        from .settings import AwsAppSettings
         from .stacks import AwsS3StateStack
 
         assert issubclass(stack_class, AwsS3StateStack)
@@ -27,7 +28,8 @@ def stack():
 
         # Initialise our stack with the monkey patching in place
         with mock_aws():
-            stack = stack_class(Testing.app(), "stack")
+            settings = AwsAppSettings("app", "dev")
+            stack = stack_class(Testing.app(), "stack", settings)
             try:
                 yield stack
             finally:

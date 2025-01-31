@@ -9,14 +9,13 @@ from .backends import AutoS3Backend
 from .settings import AwsAppSettings
 from .utils import unique_name
 
-default_settings = AwsAppSettings("app", "environment")
-
 
 class AwsS3StateStack(TerraformStack):
     def __init__(
         self,
         scope: Construct,
         id: str,
+        settings,
         s3_bucket_name=None,
         dynamodb_table_name=None,
         create_state_resources=False,
@@ -25,10 +24,7 @@ class AwsS3StateStack(TerraformStack):
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
         self._create_state_resources = create_state_resources
-
-        # Extract AwsSettingsObject from the context
-        # Defaults should only be used in unit tests
-        self.settings = self.node.try_get_context("settings") or default_settings
+        self.settings = settings
 
         # Hash a reasonably unique name for use as a bucket and dynamodb name for TF state
         self.unique_name = unique_name(self.settings.app)
@@ -64,7 +60,7 @@ class AwsS3StateStack(TerraformStack):
 
     @property
     def s3_key(self):
-        return self.environment
+        return self.settings.environment
 
     def build(self):
         pass

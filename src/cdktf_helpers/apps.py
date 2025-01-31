@@ -1,13 +1,19 @@
-import boto3
-from cdktf import App
+import types
 
-from cdktf_helpers.settings import AppSettings, AwsAppSettings
+from cdktf import App
 
 
 class AwsApp(App):
     def __init__(self, settings, **kwargs):
         super().__init__(**kwargs)
-        self.serialize_settings(settings)
 
-    def serialize_settings(self, settings):
         self.node.set_context("settings", settings.model_dump())
+
+        def deserialize(self):
+            settings_dict = self.node.get_context("settings")
+            settings_dict.update(
+                {"app": settings.app, "environment": settings.environment}
+            )
+            return type(settings).model_validate(settings_dict)
+
+        self.get_settings = types.MethodType(deserialize, self)
