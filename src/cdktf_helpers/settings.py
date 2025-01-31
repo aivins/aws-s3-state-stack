@@ -7,6 +7,7 @@ from pydantic_core import PydanticUndefined
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
+    SettingsConfigDict,
 )
 
 from .aws import (
@@ -84,49 +85,50 @@ class UserInputSettingsSource(PydanticBaseSettingsSource):
         return settings
 
 
+def fetch_settings(settings_cls, namespace):
+    ssm = boto3_session().client("ssm")
+    response = ssm.describe_parameters(
+        ParameterFilters=[
+            {
+                "Key": "Name",
+                "Option": "BeginsWith",
+                "Values": [
+                    namespace,
+                ],
+            },
+        ]
+    )
+    descriptions = {p["Name"]: p.get("Description", "") for p in response["Parameters"]}
+    response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
+    params = response.get("Parameters", [])
+    settings = {}
+    for param in params:
+        description = descriptions[param["Name"]]
+        key = param["Name"][len(namespace) + 1 :]
+        value = param["Value"]
+        if key in settings_cls.model_fields:
+            field = settings_cls.model_fields[key]
+            if get_origin(field.annotation.model_fields["value"].annotation) is list:
+                value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
+            settings[key] = field.annotation(value=value, description=description)
+    return settings
+
+
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._settings = None
 
     def fetch_settings(self):
-        ssm = boto3_session().client("ssm")
         source = self.settings_sources_data["InitSettingsSource"]
         namespace = self.settings_cls.format_namespace(
             source["app"], source["environment"]
         )
-        response = ssm.describe_parameters(
-            ParameterFilters=[
-                {
-                    "Key": "Name",
-                    "Option": "BeginsWith",
-                    "Values": [
-                        namespace,
-                    ],
-                },
-            ]
-        )
-        descriptions = {
-            p["Name"]: p.get("Description", "") for p in response["Parameters"]
+        return {
+            k: v
+            for k, v in fetch_settings(self.settings_cls, namespace).items()
+            if k not in source
         }
-        response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
-        params = response.get("Parameters", [])
-        settings = {}
-        for param in params:
-            description = descriptions[param["Name"]]
-            key = param["Name"][len(namespace) + 1 :]
-            value = param["Value"]
-            if key in source:
-                continue
-            if key in self.settings_cls.model_fields:
-                field = self.settings_cls.model_fields[key]
-                if (
-                    get_origin(field.annotation.model_fields["value"].annotation)
-                    is list
-                ):
-                    value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
-                settings[key] = field.annotation(value=value, description=description)
-        return settings
 
     def get_field_value(self, field, field_name):
         if not self._settings:
@@ -152,7 +154,7 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
 
 
 class AppSettings(BaseSettings):
-    model_config = {"extra": "allow"}
+    model_config = SettingsConfigDict(extra="allow", populate_by_name=True)
     app: str = Field(exclude=True, default="app")
     environment: str = Field(exclude=True, default="dev")
 
