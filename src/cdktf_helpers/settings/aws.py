@@ -95,12 +95,12 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         self._settings = None
 
     def fetch_settings(self):
-        from .utils import fetch_settings
+        from .utils import get_all_settings
 
         source = self.settings_sources_data["InitSettingsSource"]
         return {
             k: v
-            for k, v in fetch_settings(
+            for k, v in get_all_settings(
                 self.settings_cls, source["app"], source["environment"]
             ).items()
             if k not in source
@@ -142,19 +142,18 @@ class AwsAppSettings(AppSettings):
 
     def save(self):
         ssm = boto3_session().client("ssm")
+        saved = []
         for key, field in self.model_fields.items():
             if field.exclude:
                 continue
             value = getattr(self, key)
             full_key = f"{self.namespace}/{key}"
-            if isinstance(value, list):
-                value = ",".join([v.replace(",", r"\,") for v in value])
-            breakpoint()
             ssm.put_parameter(
                 Type="String",
                 Name=full_key,
-                Value=value,
+                Value=json.dumps(value),
                 Description=field.description or "",
                 Overwrite=True,
             )
-            yield key
+            saved.append(key)
+        return saved

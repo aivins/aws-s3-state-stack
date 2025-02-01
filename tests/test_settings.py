@@ -1,3 +1,4 @@
+import json
 from typing import List
 
 import boto3
@@ -32,7 +33,10 @@ def ssm():
 def settings(ssm):
     for key, value in TEST_PARAMS.items():
         ssm.put_parameter(
-            Type="String", Name=key, Value=value, Description="Some description"
+            Type="String",
+            Name=key,
+            Value=json.dumps(value),
+            Description="Some description",
         )
 
     class TestSettings(AwsAppSettings):

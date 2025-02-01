@@ -1,5 +1,6 @@
 import importlib
 import json
+import math
 import re
 import shutil
 import sys
@@ -48,22 +49,24 @@ def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
         )
 
 
-def fetch_settings(settings_model, app, environment):
+def fetch_settings(namespace):
+    ssm = boto3_session().client("ssm")
+    paginator = ssm.get_paginator("get_parameters_by_path")
+    pages = paginator.paginate(Path=namespace, Recursive=True)
+    for page in pages:
+        for param in page.get("Parameters", []):
+            yield param
+
+
+def get_all_settings(settings_model, app, environment):
     """Fetch all settings for the given settings model and app/environemnt from parameterstore"""
 
     namespace = settings_model.format_namespace(app, environment)
-    ssm = boto3_session().client("ssm")
-    response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
-    params = response.get("Parameters", [])
     settings = {}
-    for param in params:
+    for param in fetch_settings(namespace):
         key = param["Name"][len(namespace) + 1 :]
         value = param["Value"]
-        if key in settings_model.model_fields:
-            field = settings_model.model_fields[key]
-            if get_origin(field.annotation) is list:
-                value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
-            settings[key] = value
+        settings[key] = json.loads(value)
     return settings
 
 
@@ -97,7 +100,8 @@ def get_settings_model(class_path=None):
 
 def initialise_settings(settings_model, app, environment):
     """Interactive CLI prompts to initialise or update paramater store settings"""
-    settings = fetch_settings(settings_model, app, environment)
+    namespace = settings_model.format_namespace(app, environment)
+    settings = fetch_settings(namespace)
     updated = {}
     for key, field in settings_model.model_fields.items():
         if field.exclude:
@@ -112,13 +116,15 @@ def initialise_settings(settings_model, app, environment):
         if current_value is None:
             if field.default is not PydanticUndefined:
                 current_value = field.default
+            elif field.default_factory:
+                current_value = field.default_factory()
 
         # Prompt interactively for new value for each key, with defaults
         value = None
         default_msg = f" [{current_value}]" if current_value is not None else ""
         print(f"{field.description} ({key})" or key)
         while value in (None, ""):
-            value = input(f"Enter value{default_msg}:").strip()
+            value = input(f"Enter value{default_msg}: ").strip()
             if not value and current_value is not None:
                 value = current_value
             else:
@@ -134,9 +140,12 @@ def initialise_settings(settings_model, app, environment):
 
     # Update paramstore with new values
     namespace = settings_model.format_namespace(app, environment)
-    print(f"Saving settings to ParamterStore under {namespace}")
+    print(f"Saving settings to ParamterStore under '{namespace}'...\n")
     for key in settings.save():
-        print(f"- Wrote {key}")
+        print(f"- {key}")
+    print(
+        "\nAll settings saved successfully. Use `aws-app-settings show` to review them."
+    )
 
 
 def show_settings(settings_model, app, environment):
@@ -148,24 +157,33 @@ def show_settings(settings_model, app, environment):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings = fetch_settings(settings_model, app, environment)
+    settings_data = get_all_settings(settings_model, app, environment)
     data = []
+
+    # Create a dummy settings instance to render computed fields
+    settings = settings_model.model_construct(**settings_data)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
 
-    for key, field in settings_model.model_fields.items():
-        if field.exclude:
+    all_fields = {**settings_model.model_fields, **settings_model.model_computed_fields}
+
+    for key, field in all_fields.items():
+        exclude = field.exclude if hasattr(field, "exclude") else False
+        default = field.default if hasattr(field, "default") else None
+        required = field.is_required() if hasattr(field, "is_required") else False
+        computed = not hasattr(field, "exclude")
+
+        if exclude:
             continue
-        value = settings.get(key, None)
 
-        if isinstance(value, list):
-            value = ",".join([v.replace(",", r"\,") for v in value])
+        value = str(getattr(settings, key))
 
-        if not value:
+        if value is None:
             value = "*missing*"
-
-        if value == field.default:
+        elif computed:
+            value = f"{value} (computed)"
+        elif value == default:
             value = f"{value} (default)"
 
         data.append(
@@ -173,9 +191,59 @@ def show_settings(settings_model, app, environment):
                 wrap(key, col_widths[0]),
                 wrap(field.description or "", col_widths[1]),
                 wrap(value, col_widths[2]),
-                wrap(str(field.is_required()), col_widths[3]),
+                wrap(str(required), col_widths[3]),
             ]
         )
     headers = ["Setting", "Description", "Value", "Required"]
     print(f"Current settings for {app}/{environment}")
     print(tabulate(data, headers=headers, tablefmt="fancy_grid"))
+
+
+def delete_settings(settings_model, app, environment):
+    namespace = settings_model.format_namespace(app, environment)
+
+    print(f"\nWARNING! You are about to delete all settings for {namespace}!")
+    confirm = input("Are you really sure you want to do this? [y/N]: ")
+    if not confirm.lower().startswith("y"):
+        print("Aborted!")
+        sys.exit()
+
+    print("Determining list of settings to delete...")
+    to_delete = []
+    backup = {}
+    for param in fetch_settings(namespace):
+        to_delete.append(param["Name"])
+        backup[param["Name"]] = param["Value"]
+
+    if not len(to_delete):
+        print(f"Nothing settings found to delete under {namespace}")
+        sys.exit()
+
+    print(
+        "Last chance to back out! This will permanently delete "
+        f"{len(to_delete)} settings from {namespace}!"
+    )
+    confirm = input("Are you really, REALLY sure? [y/N]: ")
+    if not confirm.lower().startswith("y"):
+        print("Aborted. Aren't you glad that there was a second confirmation?")
+        sys.exit()
+
+    backup_file_name = f"{app}-{environment}-aws-settings.json"
+    with open(backup_file_name, "w") as fh:
+        json.dump(backup, fh, indent=2)
+
+    ssm = boto3_session().client("ssm")
+    deleted = []
+    invalid = []
+    # API limits us to deleting in batches of 10
+    for i in range(math.ceil(len(to_delete) / 10)):
+        batch = to_delete[i : min(10, len(to_delete) - i)]
+        response = ssm.delete_parameters(Names=batch)
+        deleted.extend(response.get("DeletedParameters", []))
+        invalid.extend(response.get("InvalidParameters", []))
+    print(f"Deleted {len(deleted)} of {len(to_delete)} parameters")
+    print(f"Also saved a backup as {backup_file_name}")
+    if invalid:
+        print("Deletion failed for the following parameters")
+        for name in invalid:
+            print(f"- {name}")
