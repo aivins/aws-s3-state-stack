@@ -187,6 +187,8 @@ def show_settings(settings_model, app, environment):
     all_fields = {**settings_model.model_fields, **settings_model.model_computed_fields}
 
     for key, field in all_fields.items():
+        if key == "namespace":
+            continue
         exclude = field.exclude if hasattr(field, "exclude") else False
         default = field.default if hasattr(field, "default") else None
         required = field.is_required() if hasattr(field, "is_required") else False
