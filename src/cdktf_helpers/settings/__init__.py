@@ -6,6 +6,7 @@ from .aws import (
     VpcField,
 )
 from .base import AppSettings
+from .base import custom_computed_field as computed_field
 
 __all__ = [
     AppSettings,
@@ -14,4 +15,5 @@ __all__ = [
     SubnetsField,
     PrivateSubnetsField,
     PublicSubnetsField,
+    computed_field,
 ]

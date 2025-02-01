@@ -1,3 +1,4 @@
+import json
 from functools import cache
 from typing import List, Tuple, Type
 
@@ -148,6 +149,7 @@ class AwsAppSettings(AppSettings):
             full_key = f"{self.namespace}/{key}"
             if isinstance(value, list):
                 value = ",".join([v.replace(",", r"\,") for v in value])
+            breakpoint()
             ssm.put_parameter(
                 Type="String",
                 Name=full_key,
@@ -155,3 +157,4 @@ class AwsAppSettings(AppSettings):
                 Description=field.description or "",
                 Overwrite=True,
             )
+            yield key

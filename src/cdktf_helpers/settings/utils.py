@@ -1,9 +1,12 @@
 import importlib
+import json
 import re
+import shutil
 import sys
 import textwrap
 from typing import get_origin
 
+from pydantic_core import PydanticUndefined
 from tabulate import tabulate
 
 from .aws import AwsAppSettings, boto3_session
@@ -65,7 +68,7 @@ def fetch_settings(settings_model, app, environment):
 
 
 def get_settings_model(class_path=None):
-    """Load a settings model class if provided, else try to find it in a cdktf main.py"""
+    """Load a settings model class if provided, else try to find it in cdktf_settings.py"""
 
     settings_model = None
     if class_path:
@@ -75,7 +78,7 @@ def get_settings_model(class_path=None):
     else:
         try:
             sys.path.insert(0, ".")
-            main = importlib.import_module("main")
+            main = importlib.import_module("cdktf_settings")
             sys.path.pop(0)
             settings_models = [
                 obj
@@ -94,7 +97,6 @@ def get_settings_model(class_path=None):
 
 def initialise_settings(settings_model, app, environment):
     """Interactive CLI prompts to initialise or update paramater store settings"""
-
     settings = fetch_settings(settings_model, app, environment)
     updated = {}
     for key, field in settings_model.model_fields.items():
@@ -103,28 +105,48 @@ def initialise_settings(settings_model, app, environment):
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
         if key in settings:
-            default_value = settings[key]
+            current_value = settings[key]
         else:
-            default_value = None
+            current_value = None
+
+        if current_value is None:
+            if field.default is not PydanticUndefined:
+                current_value = field.default
 
         # Prompt interactively for new value for each key, with defaults
         value = None
-        while not value:
-            default_msg = f" [{default_value}]" if default_value is not None else ""
-            field_id = f"{field.description} ({key})" if field.description else key
-            value = input(f"{field_id}{default_msg}: ")
-            if not value and default_value:
-                value = default_value
+        default_msg = f" [{current_value}]" if current_value is not None else ""
+        print(f"{field.description} ({key})" or key)
+        while value in (None, ""):
+            value = input(f"Enter value{default_msg}:").strip()
+            if not value and current_value is not None:
+                value = current_value
+            else:
+                try:
+                    if value:
+                        value = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
+        print()
         updated[key] = value
 
     settings = settings_model(app=app, environment=environment, **updated)
 
     # Update paramstore with new values
-    settings.save()
+    namespace = settings_model.format_namespace(app, environment)
+    print(f"Saving settings to ParamterStore under {namespace}")
+    for key in settings.save():
+        print(f"- Wrote {key}")
 
 
 def show_settings(settings_model, app, environment):
     """Pretty print the current paramstore settings for an app/environment"""
+
+    terminal_width = shutil.get_terminal_size().columns
+    col_percent_widths = (20, 35, 35, 10)
+    col_widths = [
+        int(col_width * terminal_width / 100) for col_width in col_percent_widths
+    ]
 
     settings = fetch_settings(settings_model, app, environment)
     data = []
@@ -136,19 +158,6 @@ def show_settings(settings_model, app, environment):
         if field.exclude:
             continue
         value = settings.get(key, None)
-        description = ""
-        required = True
-        default_value = None
-        if hasattr(field.annotation, "model_fields"):
-            description = field.annotation.model_fields["description"].default
-            required = field.annotation.model_fields["value"].is_required()
-            default_factory = field.annotation.model_fields["value"].default_factory
-            if default_factory:
-                default_value = default_factory()
-
-        default = False
-        if default_value and default_value == value:
-            default = True
 
         if isinstance(value, list):
             value = ",".join([v.replace(",", r"\,") for v in value])
@@ -156,10 +165,17 @@ def show_settings(settings_model, app, environment):
         if not value:
             value = "*missing*"
 
-        if default:
+        if value == field.default:
             value = f"{value} (default)"
 
-        data.append([wrap(key, 24), wrap(description, 24), wrap(value, 52), required])
+        data.append(
+            [
+                wrap(key, col_widths[0]),
+                wrap(field.description or "", col_widths[1]),
+                wrap(value, col_widths[2]),
+                wrap(str(field.is_required()), col_widths[3]),
+            ]
+        )
     headers = ["Setting", "Description", "Value", "Required"]
     print(f"Current settings for {app}/{environment}")
     print(tabulate(data, headers=headers, tablefmt="fancy_grid"))
