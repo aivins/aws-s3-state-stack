@@ -32,6 +32,16 @@ def settings_cli_entrypoint():
     parser.add_argument("--settings-model", default=None)
     options = parser.parse_args()
     settings_model = get_settings_model(options.settings_model)
+    if not settings_model:
+        if not options.settings_model:
+            print(
+                "Could not determine your settings model automatically. "
+                "Use --settings-model"
+            )
+        else:
+            print(f"Could not load settings model {options.settings_model}")
+        exit(1)
+
     if options.action == "show":
         show_settings(settings_model, options.app, options.environment)
     elif options.action == "init":

@@ -1,6 +1,6 @@
-import argparse
 import importlib
 import re
+import sys
 import textwrap
 from typing import get_origin
 
@@ -89,7 +89,9 @@ def get_settings_model(class_path=None):
         settings_model = getattr(module, class_name)
     else:
         try:
+            sys.path.insert(0, ".")
             main = importlib.import_module("main")
+            sys.path.pop(0)
             settings_models = [
                 obj
                 for obj in vars(main).values()
@@ -171,7 +173,7 @@ def show_settings(settings_model, app, environment):
             default = True
 
         if isinstance(value, list):
-            value = ",".join([v.replace(",", "\,") for v in setting.value])
+            value = ",".join([v.replace(",", r"\,") for v in setting.value])
 
         if not value:
             value = "*missing*"
