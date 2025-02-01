@@ -4,9 +4,7 @@ import sys
 import textwrap
 from typing import get_origin
 
-import tabulate
-
-from cdktf_helpers.backends import AutoS3Backend
+from tabulate import tabulate
 
 from .aws import AwsAppSettings, boto3_session
 
@@ -52,30 +50,17 @@ def fetch_settings(settings_model, app, environment):
 
     namespace = settings_model.format_namespace(app, environment)
     ssm = boto3_session().client("ssm")
-    response = ssm.describe_parameters(
-        ParameterFilters=[
-            {
-                "Key": "Name",
-                "Option": "BeginsWith",
-                "Values": [
-                    namespace,
-                ],
-            },
-        ]
-    )
-    descriptions = {p["Name"]: p.get("Description", "") for p in response["Parameters"]}
     response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
     params = response.get("Parameters", [])
     settings = {}
     for param in params:
-        description = descriptions[param["Name"]]
         key = param["Name"][len(namespace) + 1 :]
         value = param["Value"]
         if key in settings_model.model_fields:
             field = settings_model.model_fields[key]
-            if get_origin(field.annotation.model_fields["value"].annotation) is list:
+            if get_origin(field.annotation) is list:
                 value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
-            settings[key] = field.annotation(value=value, description=description)
+            settings[key] = value
     return settings
 
 
@@ -118,25 +103,19 @@ def initialise_settings(settings_model, app, environment):
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
         if key in settings:
-            default_value = settings[key].value
+            default_value = settings[key]
         else:
             default_value = None
-
-        # Use the description from the model, ignore any difference in paramstore
-        description = ""
-        description_field = field.annotation.model_fields["description"]
-        if description_field.default:
-            description = description_field.default
 
         # Prompt interactively for new value for each key, with defaults
         value = None
         while not value:
             default_msg = f" [{default_value}]" if default_value is not None else ""
-            field_id = f"{description} ({key})" if description else key
+            field_id = f"{field.description} ({key})" if field.description else key
             value = input(f"{field_id}{default_msg}: ")
             if not value and default_value:
                 value = default_value
-        updated[key] = field.annotation(value=value, description=description)
+        updated[key] = value
 
     settings = settings_model(app=app, environment=environment, **updated)
 
@@ -156,8 +135,7 @@ def show_settings(settings_model, app, environment):
     for key, field in settings_model.model_fields.items():
         if field.exclude:
             continue
-        setting = settings.get(key, None)
-        value = getattr(setting, "value", None)
+        value = settings.get(key, None)
         description = ""
         required = True
         default_value = None
@@ -173,7 +151,7 @@ def show_settings(settings_model, app, environment):
             default = True
 
         if isinstance(value, list):
-            value = ",".join([v.replace(",", r"\,") for v in setting.value])
+            value = ",".join([v.replace(",", r"\,") for v in value])
 
         if not value:
             value = "*missing*"

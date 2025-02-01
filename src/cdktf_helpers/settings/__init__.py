@@ -1,18 +1,17 @@
 from .aws import (
     AwsAppSettings,
-    PrivateSubnetsSetting,
-    PublicSubnetsSetting,
-    SubnetsSetting,
-    VpcSetting,
+    PrivateSubnetsField,
+    PublicSubnetsField,
+    SubnetsField,
+    VpcField,
 )
-from .base import AppSettings, Setting
+from .base import AppSettings
 
 __all__ = [
-    Setting,
     AppSettings,
     AwsAppSettings,
-    VpcSetting,
-    SubnetsSetting,
-    PrivateSubnetsSetting,
-    PublicSubnetsSetting,
+    VpcField,
+    SubnetsField,
+    PrivateSubnetsField,
+    PublicSubnetsField,
 ]

@@ -5,11 +5,6 @@ from pydantic_settings import (
 )
 
 
-class Setting(BaseModel):
-    value: str
-    description: str = ""
-
-
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="allow", populate_by_name=True)
     app: str = Field(exclude=True, default="app")
@@ -23,14 +18,8 @@ class AppSettings(BaseSettings):
     def format_namespace(cls, app: str, environment: str) -> str:
         return f"/{app}/{environment}"
 
-    def set(self, key, value, description=""):
-        key = key.strip()
-        if not key:
-            raise Exception("Cannot set an empty key")
-        if key not in self.model_fields:
-            raise Exception(f"{key} is not a field on {self.__class__.__name__}")
-        field = self.model_fields[key]
-        setattr(self, key, field.annotation(value=value, description=description))
+    def get_description(self, key):
+        return self.model_fields[key].description or ""
 
     def save(self):
         pass

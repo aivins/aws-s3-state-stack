@@ -8,7 +8,7 @@ from pydantic_settings import (
     PydanticBaseSettingsSource,
 )
 
-from .base import AppSettings, Setting
+from .base import AppSettings
 
 
 def tags(resource):
@@ -68,24 +68,24 @@ def default_public_subnet_ids():
     return get_ids(default_public_subnets())
 
 
-class VpcSetting(Setting):
-    value: str = Field(default_factory=default_vpc_id)
-    description: str = "VPC ID"
+def VpcField(description="VPC ID", **kwargs):
+    return Field(default_factory=default_vpc_id, description=description, **kwargs)
 
 
-class SubnetsSetting(Setting):
-    value: List[str] = Field(default_factory=default_subnet_ids)
-    description: str = "Subnet IDs"
+def SubnetsField(description="Subnet IDs", **kwargs):
+    return Field(default_factory=default_subnet_ids, description=description, **kwargs)
 
 
-class PrivateSubnetsSetting(Setting):
-    value: List[str] = Field(default_factory=default_private_subnet_ids)
-    description: str = "Private Subnet IDs"
+def PrivateSubnetsField(description="Subnet IDs", **kwargs):
+    return Field(
+        default_factory=default_private_subnet_ids, description=description, **kwargs
+    )
 
 
-class PublicSubnetsSetting(Setting):
-    value: List[str] = Field(default_factory=default_public_subnet_ids)
-    description: str = "Public Subnet IDs"
+def PublicSubnetsField(description="Subnet IDs", **kwargs):
+    return Field(
+        default_factory=default_public_subnet_ids, description=description, **kwargs
+    )
 
 
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
@@ -141,18 +141,17 @@ class AwsAppSettings(AppSettings):
 
     def save(self):
         ssm = boto3_session().client("ssm")
-        fields = [k for k, f in self.model_fields.items() if not f.exclude]
-        for key in fields:
-            setting = getattr(self, key)
+        for key, field in self.model_fields.items():
+            if field.exclude:
+                continue
+            value = getattr(self, key)
             full_key = f"{self.namespace}/{key}"
-            if isinstance(setting.value, list):
-                value = ",".join([v.replace(",", r"\,") for v in setting.value])
-            else:
-                value = setting.value
+            if isinstance(value, list):
+                value = ",".join([v.replace(",", r"\,") for v in value])
             ssm.put_parameter(
                 Type="String",
                 Name=full_key,
                 Value=value,
-                Description=setting.description,
+                Description=field.description or "",
                 Overwrite=True,
             )

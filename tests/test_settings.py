@@ -1,13 +1,14 @@
+from typing import List
+
 import boto3
 import pytest
 from moto import mock_aws
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from cdktf_helpers.settings import (
     AwsAppSettings,
-    Setting,
-    SubnetsSetting,
-    VpcSetting,
+    SubnetsField,
+    VpcField,
 )
 
 TEST_APP = "myapp"
@@ -35,9 +36,9 @@ def settings(ssm):
         )
 
     class TestSettings(AwsAppSettings):
-        foo: Setting
-        bar: Setting
-        other: Setting
+        foo: str = Field(description="Just foo")
+        bar: str = Field(description="And bar")
+        other: str
 
     yield TestSettings(app=TEST_APP, environment=TEST_ENV)
 
@@ -57,36 +58,20 @@ def test_aws_namespace(settings):
 
 
 def test_settings(settings):
-    assert settings.foo.value == "valueforfoo"
-    assert settings.foo.description == "Some description"
-
-
-def test_set_setting(settings):
-    settings.set("foo", "there", "Just some setting")
-    assert settings.foo.value == "there"
-    assert settings.foo.description == "Just some setting"
-
-
-def test_set_empty_key(settings):
-    with pytest.raises(Exception, match="Cannot set an empty key"):
-        settings.set("", "blah")
-
-
-def test_set_invalid_key(settings):
-    with pytest.raises(Exception, match="not a field"):
-        settings.set("badkey", "blah")
+    assert settings.foo == "valueforfoo"
+    assert settings.get_description("foo") == "Just foo"
 
 
 def test_save_settings(ssm):
     with mock_aws():
 
         class TestSettings(AwsAppSettings):
-            blah: Setting
+            blah: str
 
         settings = TestSettings(
             app="anotherapp",
             environment=TEST_ENV,
-            blah=Setting(key="blah", value="bloh"),
+            blah="bloh",
         )
 
         settings.save()
@@ -104,19 +89,19 @@ def test_vpc_setting():
     with mock_aws():
 
         class Settings(BaseModel):
-            vpc: VpcSetting = VpcSetting()
+            vpc: str = VpcField()
 
         settings = Settings()
 
-        assert settings.vpc.value.startswith("vpc-")
+        assert settings.vpc.startswith("vpc-")
 
 
 def test_subnets_setting():
     with mock_aws():
 
         class Settings(BaseModel):
-            vpc: VpcSetting = VpcSetting()
-            subnets: SubnetsSetting = SubnetsSetting()
+            vpc: str = VpcField()
+            subnets: List[str] = SubnetsField()
 
         settings = Settings()
-        assert all(value.startswith("subnet-") for value in settings.subnets.value)
+        assert all(value.startswith("subnet-") for value in settings.subnets)
