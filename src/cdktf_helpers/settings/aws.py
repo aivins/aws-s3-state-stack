@@ -140,20 +140,20 @@ class AwsAppSettings(AppSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (init_settings, ParameterStoreSettingsSource(settings_cls))
 
-    def save(self):
+    def save(self, dry_run=False):
         ssm = boto3_session().client("ssm")
         saved = []
-        for key, field in self.model_fields.items():
-            if field.exclude:
-                continue
-            value = getattr(self, key)
+        for key, field in self.get_model_fields(include_computed=True).items():
             full_key = f"{self.namespace}/{key}"
-            ssm.put_parameter(
-                Type="String",
-                Name=full_key,
-                Value=json.dumps(value),
-                Description=field.description or "",
-                Overwrite=True,
-            )
+            value = json.dumps(getattr(self, key))
+            description = field.description or ""
+            if not dry_run:
+                ssm.put_parameter(
+                    Type="String",
+                    Name=full_key,
+                    Value=value,
+                    Description=description,
+                    Overwrite=True,
+                )
             saved.append(key)
         return saved

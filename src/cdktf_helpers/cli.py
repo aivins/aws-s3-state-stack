@@ -18,6 +18,7 @@ def get_settings_cli_args():
         ("app", {}),
         ("environment", {}),
         ("--settings-model", {"default": None}),
+        ("--dry-run", {"action": "store_true"}),
     )
 
 
@@ -53,7 +54,9 @@ def settings_cli_entrypoint():
     }
 
     try:
-        actions[options.action](settings_model, options.app, options.environment)
+        actions[options.action](
+            settings_model, options.app, options.environment, options.dry_run
+        )
     except UnauthorizedSSOTokenError:
         print(
             "Looks like you don't have a valid AWS SSO session. "

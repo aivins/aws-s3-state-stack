@@ -35,11 +35,19 @@ class AppSettings(BaseSettings):
         return self.format_namespace(self.app, self.environment)
 
     @classmethod
+    def get_model_fields(cls, include_computed=False):
+        model_fields = {k: v for k, v in cls.model_fields.items() if not v.exclude}
+        if include_computed:
+            model_fields = {**model_fields, **cls.model_computed_fields}
+        model_fields.pop("namespace")
+        return model_fields
+
+    @classmethod
     def format_namespace(cls, app: str, environment: str) -> str:
         return f"/{app}/{environment}"
 
     def get_description(self, key):
         return self.model_fields[key].description or ""
 
-    def save(self):
+    def save(self, dry_run=False):
         pass

@@ -99,7 +99,7 @@ def get_settings_model(class_path=None):
     return settings_model
 
 
-def initialise_settings(settings_model, app, environment):
+def initialise_settings(settings_model, app, environment, dry_run):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     namespace = settings_model.format_namespace(app, environment)
     settings = fetch_settings(namespace)
@@ -120,8 +120,9 @@ def initialise_settings(settings_model, app, environment):
             elif field.default_factory:
                 current_value = field.default_factory()
 
+        current_value_json = None
         if current_value:
-            current_value = json.dumps(current_value)
+            current_value_json = json.dumps(current_value)
 
         list_input = False
         if get_origin(field.annotation) is list:
@@ -129,7 +130,7 @@ def initialise_settings(settings_model, app, environment):
 
         # Prompt interactively for new value for each key, with defaults
         value = None
-        default_msg = f" [{current_value}]" if current_value is not None else ""
+        default_msg = f" [{current_value_json}]" if current_value is not None else ""
         list_msg = " as JSON list" if list_input else ""
 
         print(f"{field.description} ({key})" or key)
@@ -159,14 +160,17 @@ def initialise_settings(settings_model, app, environment):
     # Update paramstore with new values
     namespace = settings_model.format_namespace(app, environment)
     print(f"Saving settings to ParamterStore under '{namespace}'...\n")
-    for key in settings.save():
+    for key in settings.save(dry_run=dry_run):
         print(f"- {key}")
-    print(
-        "\nAll settings saved successfully. Use `aws-app-settings show` to review them."
-    )
+    if dry_run:
+        print("Dry-run mode, nothing saved.")
+    else:
+        print(
+            "\nAll settings saved successfully. Use `aws-app-settings show` to review them."
+        )
 
 
-def show_settings(settings_model, app, environment):
+def show_settings(settings_model, app, environment, _):
     """Pretty print the current paramstore settings for an app/environment"""
 
     terminal_width = shutil.get_terminal_size().columns
@@ -176,28 +180,33 @@ def show_settings(settings_model, app, environment):
     ]
 
     settings_data = get_all_settings(settings_model, app, environment)
-    data = []
-
-    # Create a dummy settings instance to render computed fields
-    settings = settings_model.model_construct(**settings_data)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
 
-    all_fields = {**settings_model.model_fields, **settings_model.model_computed_fields}
-
-    for key, field in all_fields.items():
-        if key == "namespace":
-            continue
+    table_data = []
+    for key, field in settings_model.get_model_fields(include_computed=True).items():
         exclude = field.exclude if hasattr(field, "exclude") else False
-        default = field.default if hasattr(field, "default") else None
+        default = (
+            field.default
+            if getattr(field, "default", None) not in (None, PydanticUndefined)
+            else None
+        )
+        default = (
+            field.default_factory()
+            if not default and getattr(field, "default_factory", None)
+            else default
+        )
         required = field.is_required() if hasattr(field, "is_required") else False
         computed = not hasattr(field, "exclude")
+        description = field.description or (
+            getattr(field, "json_schema_extra") or {}
+        ).get("description", "")
 
         if exclude:
             continue
 
-        value = str(getattr(settings, key))
+        value = settings_data.get(key, None)
 
         if value is None:
             value = "*missing*"
@@ -205,21 +214,23 @@ def show_settings(settings_model, app, environment):
             value = f"{value} (computed)"
         elif value == default:
             value = f"{value} (default)"
+        else:
+            value = str(value)
 
-        data.append(
+        table_data.append(
             [
                 wrap(key, col_widths[0]),
-                wrap(field.description or "", col_widths[1]),
+                wrap(description, col_widths[1]),
                 wrap(value, col_widths[2]),
                 wrap(str(required), col_widths[3]),
             ]
         )
     headers = ["Setting", "Description", "Value", "Required"]
     print(f"Current settings for {app}/{environment}")
-    print(tabulate(data, headers=headers, tablefmt="fancy_grid"))
+    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
 
 
-def delete_settings(settings_model, app, environment):
+def delete_settings(settings_model, app, environment, dry_run):
     namespace = settings_model.format_namespace(app, environment)
 
     print(f"\nWARNING! You are about to delete all settings for {namespace}!")
@@ -256,14 +267,17 @@ def delete_settings(settings_model, app, environment):
     deleted = []
     invalid = []
     # API limits us to deleting in batches of 10
-    for i in range(math.ceil(len(to_delete) / 10)):
-        batch = to_delete[i : min(10, len(to_delete) - i)]
-        response = ssm.delete_parameters(Names=batch)
-        deleted.extend(response.get("DeletedParameters", []))
-        invalid.extend(response.get("InvalidParameters", []))
-    print(f"Deleted {len(deleted)} of {len(to_delete)} parameters")
-    print(f"Also saved a backup as {backup_file_name}")
-    if invalid:
-        print("Deletion failed for the following parameters")
-        for name in invalid:
-            print(f"- {name}")
+    for batch in [to_delete[i : i + 10] for i in range(0, len(to_delete), 10)]:
+        if not dry_run:
+            response = ssm.delete_parameters(Names=batch)
+            deleted.extend(response.get("DeletedParameters", []))
+            invalid.extend(response.get("InvalidParameters", []))
+    if dry_run:
+        print("Dry-run mode, nothing deleted.")
+    else:
+        print(f"Deleted {len(deleted)} of {len(to_delete)} parameters")
+        print(f"Also saved a backup as {backup_file_name}")
+        if invalid:
+            print("Deletion failed for the following parameters")
+            for name in invalid:
+                print(f"- {name}")
