@@ -7,6 +7,7 @@ import sys
 import textwrap
 from typing import get_origin
 
+from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 from tabulate import tabulate
 
@@ -119,20 +120,37 @@ def initialise_settings(settings_model, app, environment):
             elif field.default_factory:
                 current_value = field.default_factory()
 
+        if current_value:
+            current_value = json.dumps(current_value)
+
+        list_input = False
+        if get_origin(field.annotation) is list:
+            list_input = True
+
         # Prompt interactively for new value for each key, with defaults
         value = None
         default_msg = f" [{current_value}]" if current_value is not None else ""
+        list_msg = " as JSON list" if list_input else ""
+
         print(f"{field.description} ({key})" or key)
         while value in (None, ""):
-            value = input(f"Enter value{default_msg}: ").strip()
+            value = input(f"Enter value{list_msg}{default_msg}: ").strip()
             if not value and current_value is not None:
                 value = current_value
             else:
+                validator = TypeAdapter(field.annotation)
                 try:
-                    if value:
-                        value = json.loads(value)
-                except json.JSONDecodeError:
-                    pass
+                    if list_input:
+                        value = validator.validate_json(value)
+                    else:
+                        value = validator.validate_strings(value)
+                except ValidationError as e:
+                    if "invalid json" in str(e).lower() and list_input:
+                        print('Invalid list input. Try: ["val1","val2","val3"]')
+                    else:
+                        print(", ".join([x["msg"] for x in e.errors()]))
+                    value = None
+                    continue
         print()
         updated[key] = value
 
