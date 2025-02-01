@@ -44,47 +44,6 @@ class PubliceSubnetsSetting(Setting):
     description: str = "Public Subnet IDs"
 
 
-class UserInputSettingsSource(PydanticBaseSettingsSource):
-    def get_field_value(self, field, field_name, setting):
-        default_value = setting.value
-        description = None
-
-        if field.default is not PydanticUndefined:
-            default_value = default_value or field.default.value
-            description = field.default.description
-
-        if description is None:
-            description_field = field.annotation.model_fields["description"]
-            if description_field.default:
-                description = description_field.default
-
-        value = None
-        while not value:
-            default_msg = f" [{default_value}]" if default_value is not None else ""
-            field_id = f"{description} ({field_name})" if description else field_name
-            value = input(f"{field_id}{default_msg}: ")
-            if not value and default_value:
-                value = default_value
-        return (
-            field.annotation(value=value, description=description or ""),
-            field_name,
-            True,
-        )
-
-    def __call__(self):
-        source = self.settings_sources_data["ParameterStoreSettingsSource"]
-        settings = {}
-        for field_name, field in self.settings_cls.model_fields.items():
-            if field.exclude:
-                continue
-            field_value, field_key, value_is_complex = self.get_field_value(
-                field, field_name, source[field_name]
-            )
-            if field_key:
-                settings[field_key] = field_value
-        return settings
-
-
 def fetch_settings(settings_cls, namespace):
     ssm = boto3_session().client("ssm")
     response = ssm.describe_parameters(
@@ -197,7 +156,7 @@ class AwsAppSettings(AppSettings):
             setting = getattr(self, key)
             full_key = f"{self.namespace}/{key}"
             if isinstance(setting.value, list):
-                value = ",".join([v.replace(",", "\,") for v in setting.value])
+                value = ",".join([v.replace(",", r"\,") for v in setting.value])
             else:
                 value = setting.value
             ssm.put_parameter(
