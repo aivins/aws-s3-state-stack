@@ -6,7 +6,7 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from constructs import Construct
 
 from .backends import AutoS3Backend
-from .settings import AwsAppSettings
+from .settings.aws import AwsAppSettings
 from .utils import unique_name
 
 

@@ -1,27 +1,71 @@
-import os
-import re
-from typing import List, Tuple, Type, get_origin
+from functools import cache
+from typing import List, Tuple, Type
 
-from pydantic import BaseModel, Field, computed_field
-from pydantic_core import PydanticUndefined
+import boto3
+from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
-    SettingsConfigDict,
 )
 
-from .aws import (
-    boto3_session,
-    default_private_subnet_ids,
-    default_public_subnet_ids,
-    default_subnet_ids,
-    default_vpc_id,
-)
+from .base import AppSettings, Setting
 
 
-class Setting(BaseModel):
-    value: str
-    description: str = ""
+def tags(resource):
+    return {t["Key"]: t["Value"] for t in resource.tags}
+
+
+@cache
+def boto3_session():
+    return boto3.Session()
+
+
+@cache
+def default_vpc():
+    ec2 = boto3_session().resource("ec2")
+    return next((vpc for vpc in ec2.vpcs.all() if vpc.is_default), None)
+
+
+@cache
+def default_subnets():
+    vpc = default_vpc()
+    return list(vpc.subnets.all())
+
+
+@cache
+def default_private_subnets():
+    subnets = default_subnets()
+    private_subnets = [
+        s for s in subnets if "private" in tags(s).get("Name", "").lower()
+    ]
+    return private_subnets or subnets
+
+
+@cache
+def default_public_subnets():
+    subnets = default_subnets()
+    public_subnets = [s for s in subnets if "public" in tags(s).get("Name", "").lower()]
+    return public_subnets or subnets
+
+
+def get_ids(resources):
+    return [r.id for r in resources]
+
+
+def default_vpc_id():
+    return default_vpc().id
+
+
+def default_subnet_ids():
+    return get_ids(default_subnets())
+
+
+def default_private_subnet_ids():
+    return get_ids(default_private_subnets())
+
+
+def default_public_subnet_ids():
+    return get_ids(default_public_subnets())
 
 
 class VpcSetting(Setting):
@@ -39,38 +83,9 @@ class PrivateSubnetsSetting(Setting):
     description: str = "Private Subnet IDs"
 
 
-class PubliceSubnetsSetting(Setting):
+class PublicSubnetsSetting(Setting):
     value: List[str] = Field(default_factory=default_public_subnet_ids)
     description: str = "Public Subnet IDs"
-
-
-def fetch_settings(settings_cls, namespace):
-    ssm = boto3_session().client("ssm")
-    response = ssm.describe_parameters(
-        ParameterFilters=[
-            {
-                "Key": "Name",
-                "Option": "BeginsWith",
-                "Values": [
-                    namespace,
-                ],
-            },
-        ]
-    )
-    descriptions = {p["Name"]: p.get("Description", "") for p in response["Parameters"]}
-    response = ssm.get_parameters_by_path(Path=namespace, Recursive=True)
-    params = response.get("Parameters", [])
-    settings = {}
-    for param in params:
-        description = descriptions[param["Name"]]
-        key = param["Name"][len(namespace) + 1 :]
-        value = param["Value"]
-        if key in settings_cls.model_fields:
-            field = settings_cls.model_fields[key]
-            if get_origin(field.annotation.model_fields["value"].annotation) is list:
-                value = [v.replace("\\", "") for v in re.split(r"(?<!\\),", value)]
-            settings[key] = field.annotation(value=value, description=description)
-    return settings
 
 
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
@@ -79,13 +94,14 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         self._settings = None
 
     def fetch_settings(self):
+        from .utils import fetch_settings
+
         source = self.settings_sources_data["InitSettingsSource"]
-        namespace = self.settings_cls.format_namespace(
-            source["app"], source["environment"]
-        )
         return {
             k: v
-            for k, v in fetch_settings(self.settings_cls, namespace).items()
+            for k, v in fetch_settings(
+                self.settings_cls, source["app"], source["environment"]
+            ).items()
             if k not in source
         }
 
@@ -110,32 +126,6 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
             if field_key:
                 settings[field_key] = field_value
         return settings
-
-
-class AppSettings(BaseSettings):
-    model_config = SettingsConfigDict(extra="allow", populate_by_name=True)
-    app: str = Field(exclude=True, default="app")
-    environment: str = Field(exclude=True, default="dev")
-
-    @computed_field
-    def namespace(self) -> str:
-        return self.format_namespace(self.app, self.environment)
-
-    @classmethod
-    def format_namespace(cls, app: str, environment: str) -> str:
-        return f"/{app}/{environment}"
-
-    def set(self, key, value, description=""):
-        key = key.strip()
-        if not key:
-            raise Exception("Cannot set an empty key")
-        if key not in self.model_fields:
-            raise Exception(f"{key} is not a field on {self.__class__.__name__}")
-        field = self.model_fields[key]
-        setattr(self, key, field.annotation(value=value, description=description))
-
-    def save(self):
-        pass
 
 
 class AwsAppSettings(AppSettings):
