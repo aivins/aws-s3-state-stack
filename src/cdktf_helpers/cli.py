@@ -2,12 +2,17 @@ import argparse
 import importlib
 import os
 import sys
+from dataclasses import dataclass
+from typing import Annotated, List, Optional
 
+import typer
 from botocore.exceptions import UnauthorizedSSOTokenError
+from rich import print
 
 from .backends import AutoS3Backend
 from .settings.aws import (
     delete_settings,
+    ensure_backend_resources,
     initialise_settings,
     run_cdktf_app,
     show_settings,
@@ -15,15 +20,38 @@ from .settings.aws import (
 
 
 def import_from_string(path):
-    module_name, symbol_name = path.rsplit(".")
+    sys.path.insert(0, "")
     try:
-        sys.path.insert(0, "")
-        module = importlib.import_module(module_name)
-        sys.path.pop(0)
-        return getattr(module, symbol_name)
+        try:
+            module = importlib.import_module(path)
+            cls = None
+        except ImportError:
+            path, class_name = path.rsplit(".")
+            module = importlib.import_module(path)
+            cls = getattr(module, class_name, None)
     except (ImportError, AttributeError) as e:
-        print(f"Could not import {symbol_name} from {module_name}: {e}")
+        print(f"Could not import {path}: {e}")
         sys.exit(1)
+    sys.path.pop(0)
+    return (module, cls)
+
+
+def import_stack_from_string(path):
+    (module, cls) = import_from_string(path)
+    if cls is None:
+        cls = getattr(module, "stack", None)
+    if not cls:
+        raise ImportError("Could not import {path}")
+    return cls
+
+
+def import_settings_from_string(path):
+    (module, cls) = import_from_string(path)
+    if cls is None:
+        cls = getattr(module, "settings", None)
+    if not cls:
+        raise ImportError("Could not import {path}")
+    return cls
 
 
 def get_settings_model(class_path=None):
@@ -152,3 +180,81 @@ def app_entrypoint():
     settings_model = get_settings_model(options.settings_model)
     stack_classes = [import_from_string(path) for path in options.stacks]
     run_cdktf_app(options.app, options.environment, settings_model, *stack_classes)
+
+
+main = typer.Typer(no_args_is_help=True)
+settings = typer.Typer(no_args_is_help=True)
+backend = typer.Typer(no_args_is_help=True)
+main.add_typer(settings, name="settings")
+main.add_typer(backend, name="backend")
+
+app_arg = typer.Argument(
+    help="Short unique application ID string. The same for all environments (eg. mywebapp)",
+)
+
+env_arg = typer.Argument(
+    help="Environment instance of application. A namespace for all resources (eg. dev,test,prod)",
+)
+
+stacks_arg = typer.Argument(
+    min=1, help="Python class path string of a CDKTF stack class"
+)
+
+setting_model_option = typer.Option(
+    help="Python class path string to an AwsSettings model"
+)
+
+
+@main.command()
+def run(
+    app: str = app_arg,
+    environment: str = env_arg,
+    stacks: List[str] = stacks_arg,
+    settings_model: Annotated[Optional[List[str]], settings_model_option] = [],
+):
+    print("Running cdktf app", app, environment, stacks, settings_model)
+
+
+@settings.command()
+def init(
+    app: Annotated[str, app_arg],
+    environment: Annotated[str, env_arg],
+    settings_model: Annotated[Optional[str], settings_model_option] = None,
+):
+    print("Settings init", app, environment, settings_model)
+
+
+@settings.command()
+def show(
+    app: Annotated[str, app_arg],
+    environment: Annotated[str, env_arg],
+    settings_model: Annotated[Optional[str], settings_model_option] = None,
+):
+    print("Settings show", app, environment, settings_model)
+    show_settings(settings_model, app, environment)
+
+
+@settings.command()
+def delete(
+    app: Annotated[str, app_arg],
+    environment: Annotated[str, env_arg],
+    settings_model: Annotated[Optional[str], settings_model_option] = None,
+):
+    print("Settings delete", app, environment, settings_model)
+
+
+@backend.command()
+def create(app: Annotated[str, app_arg]):
+    from .stacks import AwsS3StateStack
+
+    s3_bucket_name = AwsS3StateStack.format_s3_bucket_name(app)
+    dynamodb_table_name = AwsS3StateStack.format_dynamodb_table_name(app)
+    created, existing = ensure_backend_resources(s3_bucket_name, dynamodb_table_name)
+    created = ", ".join([str(r) for r in created])
+    existing = ", ".join([str(r) for r in existing])
+    if created:
+        print(f"Created resources: {created}")
+    else:
+        print("No resources needed creation")
+    if existing:
+        print(f"Resources already present: {existing}")

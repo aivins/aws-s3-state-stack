@@ -9,7 +9,7 @@ from .defaults import (
     default_vpc_id,
 )
 from .fields import PrivateSubnetsField, PublicSubnetsField, SubnetsField, VpcField
-from .settings import AwsAppSettings
+from .settings import AwsAppSettings, AwsAppSettingsType
 from .types import Subnet, Vpc
 from .utils import (
     delete_settings,
@@ -39,4 +39,6 @@ __all__ = [
     initialise_settings,
     show_settings,
     AwsAppSettings,
+    AwsAppSettingsType,
+    run_cdktf_app,
 ]

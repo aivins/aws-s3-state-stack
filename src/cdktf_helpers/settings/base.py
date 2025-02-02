@@ -1,4 +1,5 @@
 import functools
+from typing import TypeVar
 
 from pydantic import Field
 from pydantic import computed_field as pydantic_computed_field
@@ -54,3 +55,6 @@ class AppSettings(BaseSettings):
 
     def save(self, dry_run=False):
         pass
+
+
+AppSettingsType = TypeVar("T", bound=AppSettings)

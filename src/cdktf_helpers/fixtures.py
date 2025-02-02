@@ -7,7 +7,7 @@ from moto import mock_aws
 @pytest.fixture(scope="module")
 def stack():
     @contextmanager
-    def _stack(stack_class):
+    def _stack(stack_class, settings=None):
         from cdktf import LocalBackend, Testing
 
         from .settings.aws import AwsAppSettings
@@ -28,7 +28,7 @@ def stack():
 
         # Initialise our stack with the monkey patching in place
         with mock_aws():
-            settings = AwsAppSettings(app="app", environment="dev")
+            settings = settings or AwsAppSettings(app="app", environment="dev")
             stack = stack_class(Testing.app(), "stack", settings)
             try:
                 yield stack

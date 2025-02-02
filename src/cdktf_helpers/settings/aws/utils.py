@@ -7,6 +7,7 @@ import sys
 import textwrap
 from typing import get_origin
 
+from cdktf import App
 from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 from tabulate import tabulate
@@ -20,16 +21,21 @@ def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
     session = boto3_session()
     s3 = session.resource("s3")
     dynamodb = session.resource("dynamodb")
+    created = []
+    existing = []
     for bucket in s3.buckets.all():
         if bucket.name == s3_bucket_name:
+            existing.append(bucket)
             break
     else:
         bucket = s3.create_bucket(
             Bucket=s3_bucket_name,
             CreateBucketConfiguration={"LocationConstraint": session.region_name},
         )
+        created.append(bucket)
     for table in dynamodb.tables.all():
         if table.name == dynamodb_table_name:
+            existing.append(table)
             break
     else:
         table = dynamodb.create_table(
@@ -48,6 +54,8 @@ def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
+        created.append(table)
+    return (created, existing)
 
 
 def fetch_settings(namespace):
@@ -142,7 +150,7 @@ def initialise_settings(settings_model, app, environment, dry_run):
         )
 
 
-def show_settings(settings_model, app, environment, _):
+def show_settings(settings_model, app, environment):
     """Pretty print the current paramstore settings for an app/environment"""
 
     terminal_width = shutil.get_terminal_size().columns
@@ -258,8 +266,6 @@ def delete_settings(settings_model, app, environment, dry_run):
 def run_cdktf_app(
     app_name, environment, settings_model, *stack_classes, create_state_resources=False
 ):
-    from cdktf_helpers.apps import AwsApp
-
     print(f"Using settings model {settings_model.__name__}")
 
     try:
@@ -281,7 +287,7 @@ def run_cdktf_app(
             )
         sys.exit(1)
 
-    app = AwsApp(settings)
+    app = App()
 
     print(
         f"Running CDKTF app {app_name}/{environment} with settings {settings_model.__name__}"
@@ -289,7 +295,10 @@ def run_cdktf_app(
 
     for stack_class in stack_classes:
         stack_class(
-            app, stack_class.__name__, create_state_resources=create_state_resources
+            app,
+            stack_class.__name__,
+            settings,
+            create_state_resources=create_state_resources,
         )
         print(f"Added {stack_class.__name__} to app")
 

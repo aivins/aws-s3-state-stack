@@ -1,4 +1,5 @@
 import re
+from typing import Generic, get_args, get_origin
 
 import boto3
 from cdktf import TerraformStack
@@ -6,26 +7,34 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from constructs import Construct
 
 from .backends import AutoS3Backend
-from .settings.aws import AwsAppSettings
+from .settings.aws import AwsAppSettings, AwsAppSettingsType
+from .settings.base import AppSettingsType
 from .utils import unique_name
 
 
-class AwsS3StateStack(TerraformStack):
+class AwsStack(TerraformStack, Generic[AppSettingsType]):
+    def __init__(self, scope: Construct, id: str, settings: AppSettingsType):
+        super().__init__(scope, id)
+        self.settings = settings
+
+    def build(self):
+        pass
+
+
+class AwsS3StateStack(AwsStack[AwsAppSettings], Generic[AwsAppSettingsType]):
     def __init__(
         self,
         scope: Construct,
         id: str,
-        s3_bucket_name=None,
-        dynamodb_table_name=None,
+        settings: AwsAppSettingsType,
+        s3_bucket_name: str = None,
+        dynamodb_table_name: str = None,
         create_state_resources=False,
     ):
-        super().__init__(scope, id)
+        super().__init__(scope, id, settings)
         self._s3_bucket_name = s3_bucket_name
         self._dynamodb_table_name = dynamodb_table_name
         self._create_state_resources = create_state_resources
-
-        # Hash a reasonably unique name for use as a bucket and dynamodb name for TF state
-        self.unique_name = unique_name(self.settings.app)
 
         # Initialise the provider and the backend, which may create
         # resources to store TF state
@@ -36,11 +45,28 @@ class AwsS3StateStack(TerraformStack):
         # Call build, which is stacks should add their resources
         self.build()
 
+    @classmethod
+    def get_settings_model(cls):
+        for base in cls.__orig_bases__:
+            origin = get_origin(base)
+            if issubclass(origin, AwsStack):
+                return get_args(base)[0]
+
+    @classmethod
+    def format_s3_bucket_name(cls, app):
+        name = unique_name(app)
+        return "{}-tfstate".format(re.sub(r"[\s_-]+", "-", name))
+
+    @classmethod
+    def format_dynamodb_table_name(cls, app):
+        name = unique_name(app)
+        return "{}Tfstate".format(
+            re.sub(r"[\s_-]+", " ", name).title().replace(" ", "")
+        )
+
     @property
     def s3_bucket_name(self):
-        return self._s3_bucket_name or "{}-tfstate".format(
-            re.sub(r"[\s_-]+", "-", self.unique_name)
-        )
+        return self._s3_bucket_name or self.format_s3_bucket_name(self.settings.app)
 
     @s3_bucket_name.setter
     def s3_bucket_name(self, value):
@@ -48,8 +74,8 @@ class AwsS3StateStack(TerraformStack):
 
     @property
     def dynamodb_table_name(self):
-        return self._dynamodb_table_name or "{}Tfstate".format(
-            re.sub(r"[\s_-]+", " ", self.unique_name).title().replace(" ", "")
+        return self._dynamodb_table_name or self.format_dynamodb_table_name(
+            self.settings.app
         )
 
     @dynamodb_table_name.setter
@@ -59,14 +85,6 @@ class AwsS3StateStack(TerraformStack):
     @property
     def s3_key(self):
         return self.settings.environment
-
-    @property
-    def settings(self):
-        if hasattr(self.node.root, "settings"):
-            return self.node.root.settings
-        else:
-            # This is missing in tests
-            return AwsAppSettings(app="app", environment="dev")
 
     def build(self):
         pass

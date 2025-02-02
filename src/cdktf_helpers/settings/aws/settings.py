@@ -1,5 +1,5 @@
 import json
-from typing import Tuple, Type
+from typing import Tuple, Type, TypeVar
 
 from pydantic_settings import (
     BaseSettings,
@@ -78,3 +78,6 @@ class AwsAppSettings(AppSettings):
                 )
             saved.append(key)
         return saved
+
+
+AwsAppSettingsType = TypeVar("T", bound=AwsAppSettings)
