@@ -11,7 +11,7 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 from tabulate import tabulate
 
-from .aws import AwsAppSettings, boto3_session
+from .defaults import boto3_session
 
 
 def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
@@ -73,6 +73,7 @@ def get_all_settings(settings_model, app, environment):
 
 def get_settings_model(class_path=None):
     """Load a settings model class if provided, else try to find it in cdktf_settings.py"""
+    from .settings import AwsAppSettings
 
     settings_model = None
     if class_path:

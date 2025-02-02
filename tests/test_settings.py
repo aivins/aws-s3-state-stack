@@ -6,7 +6,7 @@ import pytest
 from moto import mock_aws
 from pydantic import BaseModel, Field
 
-from cdktf_helpers.settings import (
+from cdktf_helpers.settings.aws import (
     AwsAppSettings,
     SubnetsField,
     VpcField,

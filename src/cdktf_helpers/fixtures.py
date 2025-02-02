@@ -10,7 +10,7 @@ def stack():
     def _stack(stack_class):
         from cdktf import LocalBackend, Testing
 
-        from .settings import AwsAppSettings
+        from .settings.aws import AwsAppSettings
         from .stacks import AwsS3StateStack
 
         assert issubclass(stack_class, AwsS3StateStack)

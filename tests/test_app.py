@@ -3,7 +3,7 @@ from typing import List
 from moto import mock_aws
 
 from cdktf_helpers.apps import AwsApp
-from cdktf_helpers.settings import AwsAppSettings, SubnetsField, VpcField
+from cdktf_helpers.settings.aws import AwsAppSettings, SubnetsField, VpcField
 
 
 def test_aws_app_settings():

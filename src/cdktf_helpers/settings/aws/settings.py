@@ -1,92 +1,13 @@
 import json
-from functools import cache
-from typing import List, Tuple, Type
+from typing import Tuple, Type
 
-import boto3
-from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
 )
 
-from .base import AppSettings
-
-
-def tags(resource):
-    return {t["Key"]: t["Value"] for t in resource.tags}
-
-
-@cache
-def boto3_session():
-    return boto3.Session()
-
-
-@cache
-def default_vpc():
-    ec2 = boto3_session().resource("ec2")
-    return next((vpc for vpc in ec2.vpcs.all() if vpc.is_default), None)
-
-
-@cache
-def default_subnets():
-    vpc = default_vpc()
-    return list(vpc.subnets.all())
-
-
-@cache
-def default_private_subnets():
-    subnets = default_subnets()
-    private_subnets = [
-        s for s in subnets if "private" in tags(s).get("Name", "").lower()
-    ]
-    return private_subnets or subnets
-
-
-@cache
-def default_public_subnets():
-    subnets = default_subnets()
-    public_subnets = [s for s in subnets if "public" in tags(s).get("Name", "").lower()]
-    return public_subnets or subnets
-
-
-def get_ids(resources):
-    return [r.id for r in resources]
-
-
-def default_vpc_id():
-    return default_vpc().id
-
-
-def default_subnet_ids():
-    return get_ids(default_subnets())
-
-
-def default_private_subnet_ids():
-    return get_ids(default_private_subnets())
-
-
-def default_public_subnet_ids():
-    return get_ids(default_public_subnets())
-
-
-def VpcField(description="VPC ID", **kwargs):
-    return Field(default_factory=default_vpc_id, description=description, **kwargs)
-
-
-def SubnetsField(description="Subnet IDs", **kwargs):
-    return Field(default_factory=default_subnet_ids, description=description, **kwargs)
-
-
-def PrivateSubnetsField(description="Subnet IDs", **kwargs):
-    return Field(
-        default_factory=default_private_subnet_ids, description=description, **kwargs
-    )
-
-
-def PublicSubnetsField(description="Subnet IDs", **kwargs):
-    return Field(
-        default_factory=default_public_subnet_ids, description=description, **kwargs
-    )
+from ..base import AppSettings
+from .utils import boto3_session
 
 
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
