@@ -8,9 +8,15 @@ from .defaults import (
     default_vpc,
     default_vpc_id,
 )
-from .fields import PrivateSubnetsField, PublicSubnetsField, SubnetsField, VpcField
+from .fields import (
+    HostedZoneField,
+    PrivateSubnetsField,
+    PublicSubnetsField,
+    SubnetsField,
+    VpcField,
+)
 from .settings import AwsAppSettings, AwsAppSettingsType
-from .types import Subnet, Vpc
+from .types import HostedZone, HostedZoneId, SubnetId, VpcId
 from .utils import (
     delete_settings,
     ensure_backend_resources,
@@ -41,4 +47,9 @@ __all__ = [
     AwsAppSettings,
     AwsAppSettingsType,
     synth_cdktf_app,
+    VpcId,
+    SubnetId,
+    HostedZoneId,
+    HostedZone,
+    HostedZoneField,
 ]

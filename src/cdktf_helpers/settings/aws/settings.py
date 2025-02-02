@@ -66,7 +66,13 @@ class AwsAppSettings(AppSettings):
         saved = []
         for key, field in self.get_model_fields(include_computed=True).items():
             full_key = f"{self.namespace}/{key}"
-            value = json.dumps(getattr(self, key))
+            value = getattr(self, key)
+            if type(value).__module__ != "builtins":
+                # If it's a not a str or a list, assume it's an AWS resource
+                # type with an id and save that as its key
+                value = value.id
+                breakpoint()
+            value = json.dumps(value)
             description = field.description or ""
             if not dry_run:
                 ssm.put_parameter(

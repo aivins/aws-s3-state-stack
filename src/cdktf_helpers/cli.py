@@ -98,6 +98,8 @@ stack_arg = typer.Option(
     callback=import_from_string,
 )
 
+dry_run_option = typer.Option(help="Simulate command without apply changes")
+
 
 def get_stacks_from_config():
     config_file = Path("cdktf.json")
@@ -176,8 +178,9 @@ def init(
     app: Annotated[str, app_arg],
     environment: Annotated[str, env_option] = None,
     stack: Annotated[str, stack_arg] = default_stack,
+    dry_run: Annotated[bool, dry_run_option] = False,
 ):
-    initialise_settings(app, environment, stack.get_settings_model())
+    initialise_settings(app, environment, stack.get_settings_model(), dry_run)
 
 
 @settings.command()
@@ -194,8 +197,9 @@ def delete(
     app: Annotated[str, app_arg],
     environment: Annotated[str, env_option] = None,
     stack: Annotated[str, stack_arg] = default_stack,
+    dry_run: Annotated[bool, dry_run_option] = False,
 ):
-    delete_settings(app, environment, stack.get_settings_model())
+    delete_settings(app, environment, stack.get_settings_model(), dry_run)
 
 
 @backend.command()

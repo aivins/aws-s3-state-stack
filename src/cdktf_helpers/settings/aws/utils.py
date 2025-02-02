@@ -101,9 +101,13 @@ def initialise_settings(app, environment, settings_model, dry_run):
         if current_value:
             current_value_json = json.dumps(current_value)
 
-        list_input = False
-        if get_origin(field.annotation) is list:
-            list_input = True
+        def field_is(f, t):
+            if isinstance(f.annotation, type):
+                return issubclass(f.annotation, t)
+            return get_origin(f.annotation) is t
+
+        list_input = field_is(field, list)
+        str_input = field_is(field, str)
 
         # Prompt interactively for new value for each key, with defaults
         value = None
@@ -120,8 +124,11 @@ def initialise_settings(app, environment, settings_model, dry_run):
                 try:
                     if list_input:
                         value = validator.validate_json(value)
-                    else:
+                    elif str_input:
                         value = validator.validate_strings(value)
+                    else:
+                        # an object is expected, create it from a resource id
+                        value = field.annotation(id=value)
                 except ValidationError as e:
                     if "invalid json" in str(e).lower() and list_input:
                         print('Invalid list input. Try: ["val1","val2","val3"]')

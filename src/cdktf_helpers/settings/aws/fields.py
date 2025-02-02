@@ -26,3 +26,7 @@ def PublicSubnetsField(description="Subnet IDs", **kwargs):
     return Field(
         default_factory=default_public_subnet_ids, description=description, **kwargs
     )
+
+
+def HostedZoneField(description="Hosted Zone", **kwargs):
+    return Field(description=description, **kwargs)
