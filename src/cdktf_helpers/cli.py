@@ -57,6 +57,7 @@ def to_paths(*classes):
 main = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=False,
+    add_completion=False,
     help="Commands to work with CDKTF python apps",
 )
 settings = typer.Typer(no_args_is_help=True, help="Manage stored app settings")
@@ -162,10 +163,6 @@ cdktf_commands = {
     "destroy": (cdktf_multi_stack, "Destroy the given stacks"),
     "diff": (cdktf_single_stack, "Perform a diff (terraform plan) for the given stack"),
     "list": (cdtkf_simple, "List stacks in app"),
-    "synth": (
-        cdtkf_simple,
-        "Synthesizes Terraform code for the given app in a directory",
-    ),
     "output": (cdktf_multi_stack, "Prints the output of stacks"),
     "debug": (
         cdtkf_simple,
@@ -175,10 +172,6 @@ cdktf_commands = {
 
 for command, (create_command, help) in cdktf_commands.items():
     create_command(main, command, help)
-
-# cdktf_multi_stack(
-#     main, "deploy", "Deploy the given stacks. Convenience shortcut for `run deploy`"
-# )
 
 
 @settings.command()
@@ -231,7 +224,7 @@ def entrypoint():
             "cdktf program not found on path. This is needed to run the deploy command."
         )
     try:
-        main(standalone_mode=False)
+        main()
     except UnauthorizedSSOTokenError:
         print(
             "Looks like you don't have a valid AWS SSO session. "
