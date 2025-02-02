@@ -1,246 +1,211 @@
-import argparse
+import functools
 import importlib
+import json
 import os
+import shutil
+import subprocess
 import sys
-from dataclasses import dataclass
-from typing import Annotated, List, Optional
+from pathlib import Path
+from typing import Annotated, Any, Callable, List, Optional, TypeVar
 
+import click
 import typer
 from botocore.exceptions import UnauthorizedSSOTokenError
+from pydantic import BaseModel
 from rich import print
 
-from .backends import AutoS3Backend
 from .settings.aws import (
     delete_settings,
     ensure_backend_resources,
     initialise_settings,
-    run_cdktf_app,
     show_settings,
+    synth_cdktf_app,
 )
 
 
 def import_from_string(path):
-    sys.path.insert(0, "")
+    module_name, class_name = path.rsplit(".", 1)
     try:
-        try:
-            module = importlib.import_module(path)
-            cls = None
-        except ImportError:
-            path, class_name = path.rsplit(".")
-            module = importlib.import_module(path)
-            cls = getattr(module, class_name, None)
+        sys.path.insert(0, "")
+        module = importlib.import_module(module_name)
+        sys.path.pop(0)
+        cls = getattr(module, class_name)
     except (ImportError, AttributeError) as e:
         print(f"Could not import {path}: {e}")
         sys.exit(1)
-    sys.path.pop(0)
-    return (module, cls)
-
-
-def import_stack_from_string(path):
-    (module, cls) = import_from_string(path)
-    if cls is None:
-        cls = getattr(module, "stack", None)
-    if not cls:
-        raise ImportError("Could not import {path}")
     return cls
 
 
-def import_settings_from_string(path):
-    (module, cls) = import_from_string(path)
-    if cls is None:
-        cls = getattr(module, "settings", None)
-    if not cls:
-        raise ImportError("Could not import {path}")
-    return cls
+def import_from_strings(paths):
+    classes = []
+    for path in paths:
+        classes.append(import_from_string(path))
+    return classes
 
 
-def get_settings_model(class_path=None):
-    """Load a settings model class if provided, else try to find it in cdktf_settings.py"""
-    from .settings.aws import AwsAppSettings
-
-    settings_model = None
-    if class_path:
-        settings_model = import_from_string(class_path)
-    else:
-        try:
-            sys.path.insert(0, ".")
-            main = importlib.import_module("cdktf_settings")
-            sys.path.pop(0)
-            settings_models = [
-                obj
-                for obj in vars(main).values()
-                if isinstance(obj, type) and issubclass(obj, AwsAppSettings)
-            ]
-            if settings_models:
-                settings_model = settings_models[0]
-                for item in settings_models:
-                    if len(item.mro()) > len(settings_model.mro()):
-                        settings_model = item
-        except ImportError:
-            pass
-
-    if not settings_model:
-        if not class_path:
-            print(
-                "Could not determine your settings model automatically. "
-                "Use --settings-model"
-            )
-        else:
-            print(f"Could not load settings model {class_path}")
-        sys.exit(1)
-    return settings_model
+def to_path(cls):
+    return f"{cls.__module__}.{cls.__qualname__}"
 
 
-app_arg = ("app", {})
-environment_option = (
-    "--environment",
-    {
-        "default": os.environ.get("CDKTF_APP_ENVIRONMENT"),
-        "required": not os.environ.get("CDKTF_APP_ENVIRONMENT"),
-    },
+def to_paths(*classes):
+    paths = []
+    for cls in classes:
+        paths.append(to_path(cls))
+    return paths
+
+
+main = typer.Typer(
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
+    help="Commands to work with CDKTF python apps",
 )
-settings_model_option = ("--settings-model", {"default": None})
+settings = typer.Typer(no_args_is_help=True, help="Manage stored app settings")
+backend = typer.Typer(no_args_is_help=True, help="Manage Terraform state backend")
+run = typer.Typer(
+    no_args_is_help=True,
+    help="Wrapper commands that invoke cdktf with correct arguments",
+)
 
-
-def get_settings_cli_args():
-    return (
-        ("action", {"choices": ("show", "init", "delete")}),
-        app_arg,
-        environment_option,
-        settings_model_option,
-        ("--dry-run", {"action": "store_true"}),
-    )
-
-
-def get_create_backend_resources_cli_args():
-    return (
-        ("s3_bucket_name", {"help": "Name of S3 bucket to create"}),
-        ("dynamodb_table_name", {"help": "Name of DynamoDB table to create"}),
-    )
-
-
-def get_app_args():
-    return (
-        app_arg,
-        environment_option,
-        (
-            "stacks",
-            {
-                "nargs": "+",
-                "help": "Python class path to stack(s) (eg. path.to.module.StackClass)",
-            },
-        ),
-        settings_model_option,
-    )
-
-
-def settings_cli_entrypoint():
-    parser = argparse.ArgumentParser(
-        description="Initialise, update, and show AwsAppSettings in ParameterStore"
-    )
-    for name, params in get_settings_cli_args():
-        parser.add_argument(name, **params)
-    options = parser.parse_args()
-    settings_model = get_settings_model(options.settings_model)
-
-    actions = {
-        "show": show_settings,
-        "init": initialise_settings,
-        "delete": delete_settings,
-    }
-
-    try:
-        actions[options.action](
-            settings_model, options.app, options.environment, options.dry_run
-        )
-    except UnauthorizedSSOTokenError:
-        print(
-            "Looks like you don't have a valid AWS SSO session. "
-            "Start one with `aws sso login` or manually configure your "
-            "environment before trying again."
-        )
-        sys.exit(1)
-
-
-def create_backend_resources_cli_entrypoint():
-    parser = argparse.ArgumentParser(
-        description="Create S3/DyanamoDB Terraform Backend resources if they don't already exist"
-    )
-    for name, params in get_create_backend_resources_cli_args():
-        parser.add_argument(name, **params)
-    options = parser.parse_args()
-    AutoS3Backend.ensure_backend_resources(**vars(options))
-
-
-def app_entrypoint():
-    parser = argparse.ArgumentParser("Entrypoint for CDKTF Application")
-    for name, params in get_app_args():
-        parser.add_argument(name, **params)
-    options = parser.parse_args()
-    settings_model = get_settings_model(options.settings_model)
-    stack_classes = [import_from_string(path) for path in options.stacks]
-    run_cdktf_app(options.app, options.environment, settings_model, *stack_classes)
-
-
-main = typer.Typer(no_args_is_help=True)
-settings = typer.Typer(no_args_is_help=True)
-backend = typer.Typer(no_args_is_help=True)
 main.add_typer(settings, name="settings")
 main.add_typer(backend, name="backend")
+main.add_typer(run, name="run")
 
 app_arg = typer.Argument(
     help="Short unique application ID string. The same for all environments (eg. mywebapp)",
 )
 
-env_arg = typer.Argument(
+
+def env_option_validate(value):
+    if not value:
+        raise typer.BadParameter(
+            "Must supply either --environment or set CDKTF_APP_ENVIRONMENT"
+        )
+    return value
+
+
+env_option = typer.Option(
+    callback=env_option_validate,
+    envvar="CDKTF_APP_ENVIRONMENT",
     help="Environment instance of application. A namespace for all resources (eg. dev,test,prod)",
 )
 
-stacks_arg = typer.Argument(
-    min=1, help="Python class path string of a CDKTF stack class"
+stacks_arg = typer.Option(
+    min=1,
+    help="Python class path strings of CDKTF stack classes",
+    callback=import_from_strings,
 )
 
-setting_model_option = typer.Option(
-    help="Python class path string to an AwsSettings model"
+stack_arg = typer.Option(
+    help="Python class path string of CDKTF stack class",
+    callback=import_from_string,
 )
 
 
-@main.command()
-def run(
-    app: str = app_arg,
-    environment: str = env_arg,
-    stacks: List[str] = stacks_arg,
-    settings_model: Annotated[Optional[List[str]], settings_model_option] = [],
+def get_stacks_from_config():
+    config_file = Path("cdktf.json")
+    if config_file.exists():
+        with open(config_file.name, "r") as fh:
+            config = json.load(fh)
+        stacks = config.get("context", {}).get("stacks")
+        if isinstance(stacks, list):
+            return stacks
+    return []
+
+
+default_stacks = get_stacks_from_config() or ["main.Stack"]
+default_stack = default_stacks[0]
+
+
+@main.command(help="Synthesize app directly without invoking cdktf")
+def synth(
+    app: Annotated[str, app_arg],
+    environment: Annotated[str, env_option] = None,
+    stacks: Annotated[Optional[List[str]], stacks_arg] = default_stacks,
 ):
-    print("Running cdktf app", app, environment, stacks, settings_model)
+    stacks = stacks or default_stacks
+    synth_cdktf_app(app, environment, *stacks)
+
+
+def cdktf_multi_stack(parent, command, help):
+    def wrapper(
+        environment: Annotated[str, env_option] = None,
+        stacks: Annotated[Optional[List[str]], stacks_arg] = default_stacks,
+    ):
+        os.environ["CDKTF_APP_ENVIRONMENT"] = environment
+        stacks = to_paths(*stacks)
+        subprocess.run(["cdktf", command, *stacks])
+
+    return parent.command(name=command, help=help)(wrapper)
+
+
+def cdktf_single_stack(parent, command, help):
+    def wrapper(
+        environment: Annotated[str, env_option] = None,
+        stack: Annotated[str, stack_arg] = default_stack,
+    ):
+        os.environ["CDKTF_APP_ENVIRONMENT"] = environment
+        stack = to_paths(stack)
+        subprocess.run(["cdktf", command, stack])
+
+    return parent.command(name=command, help=help)(wrapper)
+
+
+def cdtkf_simple(parent, command, help):
+    def wrapper():
+        subprocess.run(["cdktf", command])
+
+    return parent.command(name=command, help=help)(wrapper)
+
+
+cdktf_commands = {
+    "deploy": (cdktf_multi_stack, "Deploy the given stacks"),
+    "destroy": (cdktf_multi_stack, "Destroy the given stacks"),
+    "diff": (cdktf_single_stack, "Perform a diff (terraform plan) for the given stack"),
+    "list": (cdtkf_simple, "List stacks in app"),
+    "synth": (
+        cdtkf_simple,
+        "Synthesizes Terraform code for the given app in a directory",
+    ),
+    "output": (cdktf_multi_stack, "Prints the output of stacks"),
+    "debug": (
+        cdtkf_simple,
+        "Get debug information about the current project and environment",
+    ),
+}
+
+for command, (create_command, help) in cdktf_commands.items():
+    create_command(main, command, help)
+
+# cdktf_multi_stack(
+#     main, "deploy", "Deploy the given stacks. Convenience shortcut for `run deploy`"
+# )
 
 
 @settings.command()
 def init(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_arg],
-    settings_model: Annotated[Optional[str], settings_model_option] = None,
+    environment: Annotated[str, env_option] = None,
+    stack: Annotated[str, stack_arg] = default_stack,
 ):
-    print("Settings init", app, environment, settings_model)
+    initialise_settings(app, environment, stack.get_settings_model())
 
 
 @settings.command()
 def show(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_arg],
-    settings_model: Annotated[Optional[str], settings_model_option] = None,
+    environment: Annotated[str, env_option] = None,
+    stack: Annotated[str, stack_arg] = default_stack,
 ):
-    print("Settings show", app, environment, settings_model)
-    show_settings(settings_model, app, environment)
+    show_settings(app, environment, stack.get_settings_model())
 
 
 @settings.command()
 def delete(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_arg],
-    settings_model: Annotated[Optional[str], settings_model_option] = None,
+    environment: Annotated[str, env_option] = None,
+    stack: Annotated[str, stack_arg] = default_stack,
 ):
-    print("Settings delete", app, environment, settings_model)
+    delete_settings(app, environment, stack.get_settings_model())
 
 
 @backend.command()
@@ -258,3 +223,19 @@ def create(app: Annotated[str, app_arg]):
         print("No resources needed creation")
     if existing:
         print(f"Resources already present: {existing}")
+
+
+def entrypoint():
+    if not shutil.which("cdktf"):
+        print(
+            "cdktf program not found on path. This is needed to run the deploy command."
+        )
+    try:
+        main(standalone_mode=False)
+    except UnauthorizedSSOTokenError:
+        print(
+            "Looks like you don't have a valid AWS SSO session. "
+            "Start one with `aws sso login` or manually configure your "
+            "environment before trying again."
+        )
+        sys.exit(1)

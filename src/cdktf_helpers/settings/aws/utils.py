@@ -67,7 +67,7 @@ def fetch_settings(namespace):
             yield param
 
 
-def get_all_settings(settings_model, app, environment):
+def get_all_settings(app, environment, settings_model):
     """Fetch all settings for the given settings model and app/environemnt from parameterstore"""
 
     namespace = settings_model.format_namespace(app, environment)
@@ -79,7 +79,7 @@ def get_all_settings(settings_model, app, environment):
     return settings
 
 
-def initialise_settings(settings_model, app, environment, dry_run):
+def initialise_settings(app, environment, settings_model, dry_run):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     namespace = settings_model.format_namespace(app, environment)
     settings = fetch_settings(namespace)
@@ -150,7 +150,7 @@ def initialise_settings(settings_model, app, environment, dry_run):
         )
 
 
-def show_settings(settings_model, app, environment):
+def show_settings(app, environment, settings_model):
     """Pretty print the current paramstore settings for an app/environment"""
 
     terminal_width = shutil.get_terminal_size().columns
@@ -159,7 +159,11 @@ def show_settings(settings_model, app, environment):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings_data = get_all_settings(settings_model, app, environment)
+    settings_data = get_all_settings(
+        app,
+        environment,
+        settings_model,
+    )
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
@@ -210,7 +214,7 @@ def show_settings(settings_model, app, environment):
     print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
 
 
-def delete_settings(settings_model, app, environment, dry_run):
+def delete_settings(app, environment, settings_model, dry_run):
     namespace = settings_model.format_namespace(app, environment)
 
     print(f"\nWARNING! You are about to delete all settings for {namespace}!")
@@ -263,11 +267,7 @@ def delete_settings(settings_model, app, environment, dry_run):
                 print(f"- {name}")
 
 
-def run_cdktf_app(
-    app_name, environment, settings_model, *stack_classes, create_state_resources=False
-):
-    print(f"Using settings model {settings_model.__name__}")
-
+def validate_settings(settings_model, app_name, environment):
     try:
         settings = settings_model(app_name, environment)
     except ValidationError as e:
@@ -286,20 +286,24 @@ def run_cdktf_app(
                 f"--settings-model {path}`"
             )
         sys.exit(1)
+    return settings
 
+
+def synth_cdktf_app(
+    app_name, environment, *stack_classes, create_state_resources=False
+):
     app = App()
 
-    print(
-        f"Running CDKTF app {app_name}/{environment} with settings {settings_model.__name__}"
-    )
-
     for stack_class in stack_classes:
+        settings_model = stack_class.get_settings_model()
+        settings = validate_settings(settings_model, app_name, environment)
+
         stack_class(
             app,
             stack_class.__name__,
             settings,
             create_state_resources=create_state_resources,
         )
-        print(f"Added {stack_class.__name__} to app")
+        print(f"Added {stack_class.__name__} to {app_name}/{environment}")
 
     app.synth()

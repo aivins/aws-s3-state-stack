@@ -16,8 +16,8 @@ from .utils import (
     ensure_backend_resources,
     get_all_settings,
     initialise_settings,
-    run_cdktf_app,
     show_settings,
+    synth_cdktf_app,
 )
 
 __all__ = [
@@ -40,5 +40,5 @@ __all__ = [
     show_settings,
     AwsAppSettings,
     AwsAppSettingsType,
-    run_cdktf_app,
+    synth_cdktf_app,
 ]

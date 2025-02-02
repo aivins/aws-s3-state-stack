@@ -22,7 +22,7 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         return {
             k: v
             for k, v in get_all_settings(
-                self.settings_cls, source["app"], source["environment"]
+                source["app"], source["environment"], self.settings_cls
             ).items()
             if k not in source
         }
