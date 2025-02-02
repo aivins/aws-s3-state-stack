@@ -1,4 +1,3 @@
-import functools
 import importlib
 import json
 import os
@@ -6,12 +5,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated, Any, Callable, List, Optional, TypeVar
+from typing import Annotated, List, Optional
 
-import click
 import typer
 from botocore.exceptions import UnauthorizedSSOTokenError
-from pydantic import BaseModel
 from rich import print
 
 from .settings.aws import (

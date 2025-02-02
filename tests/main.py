@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-from typing import Generic
 
 from cdktf import App, TerraformOutput
 from cdktf_cdktf_provider_aws.instance import Instance
 
 from cdktf_helpers.settings.aws import AwsAppSettings
-from cdktf_helpers.stacks import AwsAppSettingsType, AwsS3StateStack
+from cdktf_helpers.stacks import AwsS3StateStack
 
 
 class MyStack(AwsS3StateStack[AwsAppSettings]):
