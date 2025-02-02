@@ -22,6 +22,7 @@ cdktf_helpers = "cdktf_helpers.pytest_plugin"
 [project.scripts]
 create-backend-resources = "cdktf_helpers.cli:create_backend_resources_cli_entrypoint"
 aws-app-settings = "cdktf_helpers.cli:settings_cli_entrypoint"
+cdktf-python-app = "cdktf_helpers.cli:app_entrypoint"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

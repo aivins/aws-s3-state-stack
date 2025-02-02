@@ -29,6 +29,9 @@ class AppSettings(BaseSettings):
     app: str = Field(exclude=True, default="app")
     environment: str = Field(exclude=True, default="dev")
 
+    def __init__(self, app: str, environment: str, **kwargs):
+        super().__init__(app=app, environment=environment, **kwargs)
+
     @pydantic_computed_field
     @property
     def namespace(self) -> str:

@@ -71,35 +71,6 @@ def get_all_settings(settings_model, app, environment):
     return settings
 
 
-def get_settings_model(class_path=None):
-    """Load a settings model class if provided, else try to find it in cdktf_settings.py"""
-    from .settings import AwsAppSettings
-
-    settings_model = None
-    if class_path:
-        module_name, class_name = class_path.rsplit(".")
-        module = importlib.import_module(module_name)
-        settings_model = getattr(module, class_name)
-    else:
-        try:
-            sys.path.insert(0, ".")
-            main = importlib.import_module("cdktf_settings")
-            sys.path.pop(0)
-            settings_models = [
-                obj
-                for obj in vars(main).values()
-                if isinstance(obj, type) and issubclass(obj, AwsAppSettings)
-            ]
-            if settings_models:
-                settings_model = settings_models[0]
-                for item in settings_models:
-                    if len(item.mro()) > len(settings_model.mro()):
-                        settings_model = item
-        except ImportError:
-            pass
-    return settings_model
-
-
 def initialise_settings(settings_model, app, environment, dry_run):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     namespace = settings_model.format_namespace(app, environment)
@@ -282,3 +253,44 @@ def delete_settings(settings_model, app, environment, dry_run):
             print("Deletion failed for the following parameters")
             for name in invalid:
                 print(f"- {name}")
+
+
+def run_cdktf_app(
+    app_name, environment, settings_model, *stack_classes, create_state_resources=False
+):
+    from cdktf_helpers.apps import AwsApp
+
+    print(f"Using settings model {settings_model.__name__}")
+
+    try:
+        settings = settings_model(app_name, environment)
+    except ValidationError as e:
+        print("Settings failed validation:")
+        for error in e.errors():
+            key = error["loc"][0]
+            pos = f".{error['loc'][1]}" if len(error["loc"]) > 1 else ""
+            msg = error["msg"]
+            input = error["input"]
+            path = f"{settings_model.__module__}.{settings_model.__qualname__}"
+            print(f"- {key}{pos}: {msg} (input: {input})")
+            print(
+                "\nYou can review your settings with "
+                f"`aws-app-settings show {app_name} {environment}` or "
+                f"update them with `aws-app-settings init {app_name} {environment} "
+                f"--settings-model {path}`"
+            )
+        sys.exit(1)
+
+    app = AwsApp(settings)
+
+    print(
+        f"Running CDKTF app {app_name}/{environment} with settings {settings_model.__name__}"
+    )
+
+    for stack_class in stack_classes:
+        stack_class(
+            app, stack_class.__name__, create_state_resources=create_state_resources
+        )
+        print(f"Added {stack_class.__name__} to app")
+
+    app.synth()
