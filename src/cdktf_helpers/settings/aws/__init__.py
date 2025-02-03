@@ -12,17 +12,13 @@ from .fields import (
     VpcField,
 )
 from .settings import AwsAppSettings, AwsAppSettingsType
-from .types import HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId
+from .types import AwsResource, HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId
 from .utils import (
-    delete_settings,
     ensure_backend_resources,
     get_all_settings,
-    initialise_settings,
-    show_settings,
-    synth_cdktf_app,
 )
 
-__all__ = [
+defaults = [
     default_private_subnets,
     default_private_subnets,
     default_public_subnets,
@@ -31,23 +27,24 @@ __all__ = [
     default_subnets,
     default_vpc,
     default_vpc,
+]
+
+fields = [
     PrivateSubnetsField,
     PublicSubnetsField,
     SubnetsField,
     VpcField,
-    delete_settings,
+    HostedZoneField,
+]
+
+settings = [AwsAppSettings, AwsAppSettingsType]
+
+types = [AwsResource, HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId]
+
+utils = [
     ensure_backend_resources,
     get_all_settings,
-    initialise_settings,
-    show_settings,
-    AwsAppSettings,
-    AwsAppSettingsType,
-    synth_cdktf_app,
-    VpcId,
-    SubnetId,
-    HostedZoneId,
-    HostedZone,
-    HostedZoneField,
-    Subnet,
-    Vpc,
 ]
+
+
+__all__ = [*defaults, *fields, *settings, *types, *utils]

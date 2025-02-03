@@ -17,6 +17,9 @@ class AwsResource(BaseModel, ABC):
     def resource(self):
         pass
 
+    def __str__(self):
+        return self.id
+
 
 class Vpc(AwsResource):
     id: VpcId
