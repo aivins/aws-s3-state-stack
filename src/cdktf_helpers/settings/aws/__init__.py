@@ -16,7 +16,7 @@ from .fields import (
     VpcField,
 )
 from .settings import AwsAppSettings, AwsAppSettingsType
-from .types import HostedZone, HostedZoneId, SubnetId, VpcId
+from .types import HostedZone, HostedZoneId, Subnet, SubnetId, VpcId
 from .utils import (
     delete_settings,
     ensure_backend_resources,
@@ -52,4 +52,5 @@ __all__ = [
     HostedZoneId,
     HostedZone,
     HostedZoneField,
+    Subnet,
 ]

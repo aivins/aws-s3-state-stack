@@ -2,7 +2,7 @@ import json
 import shutil
 import sys
 import textwrap
-from typing import get_origin
+from typing import get_args, get_origin
 
 from cdktf import App
 from pydantic import TypeAdapter, ValidationError
@@ -102,18 +102,21 @@ def initialise_settings(app, environment, settings_model, dry_run):
             current_value_json = json.dumps(current_value)
 
         def field_is(f, t):
+            result = False
             if isinstance(f.annotation, type):
-                return issubclass(f.annotation, t)
-            return get_origin(f.annotation) is t
+                result = issubclass(f.annotation, t)
+            else:
+                result = get_origin(f.annotation) is t
+            return result
 
-        list_input = field_is(field, list)
         str_input = field_is(field, str)
+        list_input = field_is(field, list)
 
-        # Prompt interactively for new value for each key, with defaults
         value = None
         default_msg = f" [{current_value_json}]" if current_value is not None else ""
         list_msg = " as JSON list" if list_input else ""
 
+        # Prompt interactively for new value for each key, with defaults
         print(f"{field.description} ({key})" or key)
         while value in (None, ""):
             value = input(f"Enter value{list_msg}{default_msg}: ").strip()

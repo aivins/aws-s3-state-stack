@@ -10,6 +10,20 @@ SubnetId = Annotated[str, StringConstraints(pattern=r"^subnet-[a-z0-9]+$")]
 HostedZoneId = Annotated[str, StringConstraints(pattern=r"^/hostedzone/[A-Z0-9]+$")]
 
 
+class Subnet(BaseModel):
+    id: SubnetId
+
+    @computed_field
+    def cidr_block(self) -> str:
+        return self.resource.cidr_block
+
+    @cached_property
+    def resource(self):
+        resource = boto3_session().resource("ec2").Subnet(self.id)
+        resource.load()
+        return resource
+
+
 class HostedZone(BaseModel):
     id: HostedZoneId
 
