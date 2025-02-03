@@ -25,6 +25,6 @@ class MyStack(AwsS3StateStack[AwsAppSettings]):
 
 
 if __name__ == "__main__":
-    app = App(context={"namespace": "aivinstest"})
+    app = App()
     stack = MyStack(app, "test_stack")
     app.synth()

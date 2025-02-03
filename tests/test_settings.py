@@ -97,7 +97,7 @@ def test_vpc_setting():
 
         settings = Settings()
 
-        assert settings.vpc.startswith("vpc-")
+        assert settings.vpc.id.startswith("vpc-")
 
 
 def test_subnets_setting():
@@ -108,4 +108,4 @@ def test_subnets_setting():
             subnets: List[str] = SubnetsField()
 
         settings = Settings()
-        assert all(value.startswith("subnet-") for value in settings.subnets)
+        assert all(value.id.startswith("subnet-") for value in settings.subnets)

@@ -2,14 +2,19 @@ import json
 import shutil
 import sys
 import textwrap
-from typing import get_args, get_origin
+from functools import cache
+from typing import get_origin
 
+import boto3
 from cdktf import App
 from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 from tabulate import tabulate
 
-from .defaults import boto3_session
+
+@cache
+def boto3_session():
+    return boto3.Session()
 
 
 def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
@@ -314,3 +319,7 @@ def synth_cdktf_app(
         print(f"Added {stack_class.__name__} to {app_name}/{environment}")
 
     app.synth()
+
+
+def tags(resource):
+    return {t["Key"]: t["Value"] for t in resource.tags}

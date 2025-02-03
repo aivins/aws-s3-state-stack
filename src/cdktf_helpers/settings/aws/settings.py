@@ -71,7 +71,6 @@ class AwsAppSettings(AppSettings):
                 # If it's a not a str or a list, assume it's an AWS resource
                 # type with an id and save that as its key
                 value = value.id
-                breakpoint()
             value = json.dumps(value)
             description = field.description or ""
             if not dry_run:

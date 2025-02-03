@@ -1,12 +1,8 @@
 from .defaults import (
-    default_private_subnet_ids,
     default_private_subnets,
-    default_public_subnet_ids,
     default_public_subnets,
-    default_subnet_ids,
     default_subnets,
     default_vpc,
-    default_vpc_id,
 )
 from .fields import (
     HostedZoneField,
@@ -16,7 +12,7 @@ from .fields import (
     VpcField,
 )
 from .settings import AwsAppSettings, AwsAppSettingsType
-from .types import HostedZone, HostedZoneId, Subnet, SubnetId, VpcId
+from .types import HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId
 from .utils import (
     delete_settings,
     ensure_backend_resources,
@@ -27,14 +23,14 @@ from .utils import (
 )
 
 __all__ = [
-    default_private_subnet_ids,
     default_private_subnets,
-    default_public_subnet_ids,
+    default_private_subnets,
     default_public_subnets,
-    default_subnet_ids,
+    default_public_subnets,
+    default_subnets,
     default_subnets,
     default_vpc,
-    default_vpc_id,
+    default_vpc,
     PrivateSubnetsField,
     PublicSubnetsField,
     SubnetsField,
@@ -53,4 +49,5 @@ __all__ = [
     HostedZone,
     HostedZoneField,
     Subnet,
+    Vpc,
 ]
