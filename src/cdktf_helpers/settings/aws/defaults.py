@@ -7,11 +7,12 @@ from . import types
 
 @cache
 def default_vpc():
-    ec2 = boto3_session().resource("ec2")
-    vpc = next((vpc for vpc in ec2.vpcs.all() if vpc.is_default), None)
+    ec2 = boto3_session().client("ec2")
+    response = ec2.describe_vpcs(Filters=[{"Name": "is-default", "Values": ["true"]}])
+    vpc = response["Vpcs"][0] if response["Vpcs"] else None
     if not vpc:
         raise TypeError("No default VPC found")
-    return types.Vpc(id=vpc.id)
+    return types.Vpc(id=vpc["VpcId"])
 
 
 @cache

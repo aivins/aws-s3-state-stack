@@ -321,5 +321,5 @@ def synth_cdktf_app(
     app.synth()
 
 
-def tags(resource):
-    return {t["Key"]: t["Value"] for t in resource.tags}
+def tags(obj):
+    return {t["Key"]: t["Value"] for t in obj.resource.tags}
