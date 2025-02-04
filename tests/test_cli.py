@@ -54,7 +54,8 @@ arguments = ("testapp", "--environment", "dev", "--stack", "cli.Stack")
 def test_delete_settings(workdir, capsys):
     with workdir(input=["y", "y"]) as (path, settings):
         delete_settings("testapp", "dev", type(settings))
-        # captured = capsys.readouterr()
+        captured = capsys.readouterr()
+        print("OUT", captured.out)
 
 
 # def test_delete_settings_cli(workdir):

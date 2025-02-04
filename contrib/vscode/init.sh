@@ -15,7 +15,7 @@ mkdir -p .vscode ||
 die "Could not create .vscode/"
 
 
-for file in settings.json extensions.json
+for file in settings.json extensions.json launch.json
 do
   cat $(dirname "$0")/$file >.vscode/$file.new || die "Could not write $file"
 	if test -f .vscode/$file
