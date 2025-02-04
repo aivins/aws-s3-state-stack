@@ -43,7 +43,7 @@ class AppSettings(BaseSettings):
         model_fields = {k: v for k, v in cls.model_fields.items() if not v.exclude}
         if include_computed:
             model_fields = {**model_fields, **cls.model_computed_fields}
-        model_fields.pop("namespace")
+        model_fields.pop("namespace", None)
         return model_fields
 
     @classmethod

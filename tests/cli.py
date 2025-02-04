@@ -15,6 +15,6 @@ class Settings(AwsAppSettings):
     comment: str = Field(default="", description="Just an extra comment")
 
 
-class Stack(AwsS3StateStack[AwsAppSettings]):
+class Stack(AwsS3StateStack[Settings]):
     def build(self):
         pass

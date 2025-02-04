@@ -1,12 +1,32 @@
 import boto3
-import pytest
 from moto import mock_aws
 
 from cdktf_helpers.settings.aws import (
+    AwsResources,
     HostedZone,
     Subnet,
     Vpc,
 )
+
+
+def test_type_equality():
+    with mock_aws():
+        assert Vpc(id="vpc-12345") == Vpc(id="vpc-12345")
+        assert Vpc(id="vpc-12345") != Vpc(id="vpc-67890")
+
+
+def test_contains():
+    with mock_aws():
+        subnet1 = Subnet(id="subnet-123")
+        subnet2 = Subnet(id="subnet-456")
+        subnet3 = Subnet(id="subnet-789")
+        subnets = AwsResources([subnet1, subnet2])
+        assert subnet1 in subnets
+        assert subnet2 in subnets
+        assert subnet3 not in subnets
+        assert subnet1.id in subnets
+        assert subnet2.id in subnets
+        assert subnet3.id not in subnets
 
 
 def test_vpc():

@@ -12,7 +12,16 @@ from .fields import (
     VpcField,
 )
 from .settings import AwsAppSettings, AwsAppSettingsType
-from .types import AwsResource, HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId
+from .types import (
+    AwsResource,
+    AwsResources,
+    HostedZone,
+    HostedZoneId,
+    Subnet,
+    SubnetId,
+    Vpc,
+    VpcId,
+)
 from .utils import (
     ensure_backend_resources,
     get_all_settings,
@@ -39,7 +48,16 @@ fields = [
 
 settings = [AwsAppSettings, AwsAppSettingsType]
 
-types = [AwsResource, HostedZone, HostedZoneId, Subnet, SubnetId, Vpc, VpcId]
+types = [
+    AwsResource,
+    AwsResources,
+    HostedZone,
+    HostedZoneId,
+    Subnet,
+    SubnetId,
+    Vpc,
+    VpcId,
+]
 
 utils = [
     ensure_backend_resources,

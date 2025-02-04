@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import UserList
 from functools import cached_property
 from typing import Annotated
 
@@ -19,6 +20,16 @@ class AwsResource(BaseModel, ABC):
 
     def __str__(self):
         return self.id
+
+    def __eq__(self, other):
+        return other and isinstance(other, type(self)) and other.id == self.id
+
+
+class AwsResources(UserList):
+    def __contains__(self, resource_or_id):
+        if isinstance(resource_or_id, AwsResource):
+            return super().__contains__(resource_or_id)
+        return resource_or_id in (r.id for r in self)
 
 
 class Vpc(AwsResource):

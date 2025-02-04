@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, List, Optional, get_origin
 
 import typer
-from botocore.exceptions import UnauthorizedSSOTokenError
+from botocore.exceptions import NoCredentialsError, UnauthorizedSSOTokenError
 from cdktf import App
 from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
@@ -219,9 +219,12 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
             elif field.default_factory:
                 current_value = field.default_factory()
 
-        current_value_json = None
-        if current_value:
-            current_value_json = json.dumps(current_value)
+        current_value_str = None
+        if current_value is not None:
+            if isinstance(current_value, list):
+                current_value_str = str([str(v) for v in current_value])
+            else:
+                current_value_str = str(current_value)
 
         def field_is(f, t):
             result = False
@@ -235,7 +238,7 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         list_input = field_is(field, list)
 
         value = None
-        default_msg = f" [{current_value_json}]" if current_value is not None else ""
+        default_msg = f" [{current_value_str}]" if current_value_str is not None else ""
         list_msg = " as JSON list" if list_input else ""
 
         # Prompt interactively for new value for each key, with defaults
@@ -289,10 +292,14 @@ def init(
     initialise_settings(app, environment, stack.get_settings_model(), dry_run)
 
 
+def get_terminal_width():
+    return shutil.get_terminal_size().columns
+
+
 def show_settings(app, environment, settings_model):
     """Pretty print the current paramstore settings for an app/environment"""
 
-    terminal_width = shutil.get_terminal_size().columns
+    terminal_width = get_terminal_width()
     col_percent_widths = (20, 35, 35, 10)
     col_widths = [
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
@@ -331,14 +338,17 @@ def show_settings(app, environment, settings_model):
 
         value = settings_data.get(key, None)
 
+        is_default = value == str(default)
+
         if value is None:
             value = "*missing*"
-        elif computed:
-            value = f"{value} (computed)"
-        elif value == default:
-            value = f"{value} (default)"
         else:
-            value = str(value)
+            value = json.dumps(value)
+
+        if computed:
+            value = f"{value} (computed)"
+        elif is_default:
+            value = f"{value} (default)"
 
         table_data.append(
             [
@@ -442,22 +452,6 @@ def create(app: Annotated[str, app_arg]):
         print(f"Resources already present: {existing}")
 
 
-def entrypoint():
-    if not shutil.which("cdktf"):
-        print(
-            "cdktf program not found on path. This is needed to run the deploy command."
-        )
-    try:
-        main()
-    except UnauthorizedSSOTokenError:
-        print(
-            "Looks like you don't have a valid AWS SSO session. "
-            "Start one with `aws sso login` or manually configure your "
-            "environment before trying again."
-        )
-        sys.exit(1)
-
-
 def validate_settings(settings_model, app_name, environment):
     try:
         settings = settings_model(app_name, environment)
@@ -478,3 +472,19 @@ def validate_settings(settings_model, app_name, environment):
             )
         sys.exit(1)
     return settings
+
+
+def entrypoint():
+    if not shutil.which("cdktf"):
+        print(
+            "cdktf program not found on path. This is needed to run the deploy command."
+        )
+    try:
+        main()
+    except (UnauthorizedSSOTokenError, NoCredentialsError):
+        print(
+            "Looks like you don't have a valid AWS SSO session. "
+            "Start one with `aws sso login` or manually configure your "
+            "environment before trying again."
+        )
+        sys.exit(1)
