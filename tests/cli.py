@@ -16,7 +16,7 @@ class Settings(AwsAppSettings):
     comment: str = Field(default="", description="Just an extra comment")
 
     @computed_field
-    def comment_upper(self):
+    def comment_upper(self) -> str:
         return self.comment.upper()
 
 
