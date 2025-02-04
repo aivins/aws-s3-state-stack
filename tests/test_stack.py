@@ -1,3 +1,6 @@
+from cdktf import Testing
+
+
 def test_stack(stack):
     from cdktf_helpers.stacks import AwsS3StateStack
 
@@ -21,7 +24,6 @@ def test_stack_settings_reflection(stack):
 
 
 def test_should_contain_correct_instance(synthesized):
-    from cdktf import Testing
     from cdktf_cdktf_provider_aws.instance import Instance
 
     from .main import MyStack
@@ -35,8 +37,6 @@ def test_should_contain_correct_instance(synthesized):
 
 
 def test_check_validity(fully_synthesized):
-    from cdktf import Testing
-
     from .main import MyStack
 
     with fully_synthesized(MyStack) as fully_synthesized:
