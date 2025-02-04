@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+from functools import cache
 from pathlib import Path
 from typing import Annotated, List, Optional, get_origin
 
@@ -56,6 +57,31 @@ def to_paths(*classes):
     return paths
 
 
+@cache
+def load_cdktf_python_config():
+    config_file = Path("cdktf.json")
+    config = {"app": None, "stacks": ["main.Stack"]}
+    if config_file.exists():
+        with open(config_file.name, "r") as fh:
+            config.update(json.load(fh).get("context", {}).get("cdktf-python", {}))
+        stacks = config.get("context", {}).get("stacks")
+        if isinstance(stacks, list):
+            return stacks
+    return config
+
+
+def stacks_from_config():
+    return load_cdktf_python_config()["stacks"]
+
+
+def stack_from_config():
+    return stacks_from_config()[0]
+
+
+def app_from_config():
+    return load_cdktf_python_config()["app"]
+
+
 main = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=False,
@@ -64,17 +90,13 @@ main = typer.Typer(
 )
 settings = typer.Typer(no_args_is_help=True, help="Manage stored app settings")
 backend = typer.Typer(no_args_is_help=True, help="Manage Terraform state backend")
-run = typer.Typer(
-    no_args_is_help=True,
-    help="Wrapper commands that invoke cdktf with correct arguments",
-)
-
 main.add_typer(settings, name="settings")
 main.add_typer(backend, name="backend")
-main.add_typer(run, name="run")
 
-app_arg = typer.Argument(
+app_arg = typer.Option(
     help="Short unique application ID string. The same for all environments (eg. mywebapp)",
+    envvar="CDKTF_APP_NAME",
+    default_factory=app_from_config,
 )
 
 
@@ -86,39 +108,36 @@ def env_option_validate(value):
     return value
 
 
-env_option = typer.Option(
+env_arg = typer.Option(
     callback=env_option_validate,
     envvar="CDKTF_APP_ENVIRONMENT",
     help="Environment instance of application. A namespace for all resources (eg. dev,test,prod)",
+    default_factory=lambda: None,
 )
+
+
+# env_option = typer.Option(
+#     callback=env_option_validate,
+#     envvar="CDKTF_APP_ENVIRONMENT",
+#     help="Environment instance of application. A namespace for all resources (eg. dev,test,prod)",
+# )
 
 stacks_arg = typer.Option(
     min=1,
     help="Python class path strings of CDKTF stack classes",
+    envvar="CDKTF_APP_STACKS",
     callback=import_from_strings,
+    default_factory=stacks_from_config,
 )
 
 stack_arg = typer.Option(
     help="Python class path string of CDKTF stack class",
+    envvar="CDKTF_APP_STACKS",
     callback=import_from_string,
+    default_factory=stack_from_config,
 )
 
 dry_run_option = typer.Option(help="Simulate command without apply changes")
-
-
-def get_stacks_from_config():
-    config_file = Path("cdktf.json")
-    if config_file.exists():
-        with open(config_file.name, "r") as fh:
-            config = json.load(fh)
-        stacks = config.get("context", {}).get("stacks")
-        if isinstance(stacks, list):
-            return stacks
-    return []
-
-
-default_stacks = get_stacks_from_config() or ["main.Stack"]
-default_stack = default_stacks[0]
 
 
 def synth_cdktf_app(
@@ -144,17 +163,16 @@ def synth_cdktf_app(
 @main.command(help="Synthesize app directly without invoking cdktf")
 def synth(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_option] = None,
-    stacks: Annotated[Optional[List[str]], stacks_arg] = default_stacks,
+    stacks: Annotated[Optional[List[str]], stacks_arg],
+    environment: Annotated[Optional[str], env_arg],
 ):
-    stacks = stacks or default_stacks
     synth_cdktf_app(app, environment, *stacks)
 
 
 def cdktf_multi_stack(parent, command, help):
     def wrapper(
-        environment: Annotated[str, env_option] = None,
-        stacks: Annotated[Optional[List[str]], stacks_arg] = default_stacks,
+        stacks: Annotated[Optional[List[str]], stacks_arg],
+        environment: Annotated[Optional[str], env_arg],
     ):
         os.environ["CDKTF_APP_ENVIRONMENT"] = environment
         stacks = to_paths(*stacks)
@@ -165,8 +183,8 @@ def cdktf_multi_stack(parent, command, help):
 
 def cdktf_single_stack(parent, command, help):
     def wrapper(
-        environment: Annotated[str, env_option] = None,
-        stack: Annotated[str, stack_arg] = default_stack,
+        stack: Annotated[str, stack_arg],
+        environment: Annotated[Optional[str], env_arg],
     ):
         os.environ["CDKTF_APP_ENVIRONMENT"] = environment
         stack = to_paths(stack)
@@ -278,15 +296,15 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         print("Dry-run mode, nothing saved.")
     else:
         print(
-            "\nAll settings saved successfully. Use `aws-app-settings show` to review them."
+            "\nAll settings saved successfully. Use `cdktf-python settings show` to review them."
         )
 
 
 @settings.command()
 def init(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_option] = None,
-    stack: Annotated[str, stack_arg] = default_stack,
+    stack: Annotated[str, stack_arg],
+    environment: Annotated[Optional[str], env_arg],
     dry_run: Annotated[bool, dry_run_option] = False,
 ):
     initialise_settings(app, environment, stack.get_settings_model(), dry_run)
@@ -365,9 +383,9 @@ def show_settings(app, environment, settings_model):
 
 @settings.command()
 def show(
-    app: Annotated[str, app_arg],
-    environment: Annotated[str, env_option] = None,
-    stack: Annotated[str, stack_arg] = default_stack,
+    app: Annotated[Optional[str], app_arg],
+    stack: Annotated[Optional[str], stack_arg],
+    environment: Annotated[Optional[str], env_arg],
 ):
     show_settings(app, environment, stack.get_settings_model())
 
@@ -428,8 +446,8 @@ def delete_settings(app, environment, settings_model, dry_run=False):
 @settings.command()
 def delete(
     app: Annotated[str, app_arg],
-    environment: Annotated[str, env_option] = None,
-    stack: Annotated[str, stack_arg] = default_stack,
+    stack: Annotated[str, stack_arg],
+    environment: Annotated[Optional[str], env_arg],
     dry_run: Annotated[bool, dry_run_option] = False,
 ):
     delete_settings(app, environment, stack.get_settings_model(), dry_run)
@@ -466,8 +484,8 @@ def validate_settings(settings_model, app_name, environment):
             print(f"- {key}{pos}: {msg} (input: {input})")
             print(
                 "\nYou can review your settings with "
-                f"`aws-app-settings show {app_name} {environment}` or "
-                f"update them with `aws-app-settings init {app_name} {environment} "
+                f"`cdktf-python settings show {app_name} {environment}` or "
+                f"update them with `cdktf-python settings init {app_name} {environment} "
                 f"--settings-model {path}`"
             )
         sys.exit(1)

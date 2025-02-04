@@ -7,8 +7,11 @@
   "terraformModules": [],
   "codeMakerOutput": "imports",
   "context": {
-    "stacks": [
-      "cli.Stack"
-    ]
+    "cdktf-python": {
+      "app": "testapp",
+      "stacks": [
+        "cli.Stack"
+      ]
+    }
   }
 }

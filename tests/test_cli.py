@@ -15,8 +15,6 @@ from typer.testing import CliRunner
 
 from cdktf_helpers.cli import main
 
-runner = CliRunner()
-
 
 @pytest.fixture()
 def workdir(tmp_path):
@@ -42,13 +40,14 @@ def workdir(tmp_path):
     return _workdir
 
 
-arguments = ("testapp", "--environment", "dev", "--stack", "cli.Stack")
+arguments = ("--environment", "dev")
 
 
 def test_init_settings(workdir):
     input = "\n".join(["", "red", '["horse", "battery"]', "hello"]) + "\n"
 
     with workdir():
+        runner = CliRunner()
         result = runner.invoke(
             main, ["settings", "init", *arguments], input=input, catch_exceptions=False
         )
@@ -80,13 +79,18 @@ def test_init_settings(workdir):
 
 def test_show_settings(workdir):
     with workdir():
-        result = runner.invoke(main, ["settings", "show", *arguments])
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["settings", "show", *arguments],
+        )
         data = parse_show_output(result.stdout)
         assert data["vpc"]["value"].startswith("vpc-")
 
 
 def test_delete_settings(workdir):
     with workdir():
+        runner = CliRunner()
         result = runner.invoke(
             main,
             ["settings", "delete", *arguments],

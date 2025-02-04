@@ -9,22 +9,22 @@ from pydantic_settings import (
 )
 
 
-def computed_field(*args, **kwargs):
-    description = kwargs.get("description", "")
-    json_schema_extra = kwargs.get("json_schema_extra", {})
-
+def computed_field(arg, description="x", json_schema_extra={}, **kwargs):
     @functools.wraps(pydantic_computed_field)
     def wrapper(func=None):
         def wrapped():
             return pydantic_computed_field(
-                json_schema_extra={"description": description, **json_schema_extra},
+                json_schema_extra={
+                    "description": arg or description,
+                    **json_schema_extra,
+                },
                 **kwargs,
             )(func)
 
         return wrapped()
 
-    if len(args) == 1 and callable(args[0]) and not kwargs:
-        return wrapper(args[0])
+    if callable(arg):
+        return wrapper(arg)
 
     return wrapper
 

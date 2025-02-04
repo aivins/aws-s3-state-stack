@@ -72,7 +72,13 @@ class AwsAppSettings(AppSettings):
                 # type with an id and save that as its key
                 value = value.id
             value = json.dumps(value)
-            description = field.description or ""
+            description = field.description
+            if not description:
+                description = (
+                    field.json_schema_extra.get("description", "")
+                    if field.json_schema_extra
+                    else ""
+                )
             if not dry_run:
                 ssm.put_parameter(
                     Type="String",

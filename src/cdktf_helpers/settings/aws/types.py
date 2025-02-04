@@ -58,7 +58,7 @@ class Subnet(AwsResource):
         resource.load()
         return resource
 
-    @computed_field()
+    @computed_field("Subnet CIDR block")
     def cidr_block(self) -> str:
         return self.resource.cidr_block
 
