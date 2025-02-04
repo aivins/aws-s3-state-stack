@@ -9,8 +9,9 @@ from pydantic_settings import (
 )
 
 
-def computed_field(description="", json_schema_extra={}, **kwargs):
-    """Custom wrapper for computed_field that ensures it remains a property."""
+def computed_field(*args, **kwargs):
+    description = kwargs.get("description", "")
+    json_schema_extra = kwargs.get("json_schema_extra", {})
 
     @functools.wraps(pydantic_computed_field)
     def wrapper(func=None):
@@ -21,6 +22,9 @@ def computed_field(description="", json_schema_extra={}, **kwargs):
             )(func)
 
         return wrapped()
+
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        return wrapper(args[0])
 
     return wrapper
 
@@ -57,4 +61,4 @@ class AppSettings(BaseSettings):
         pass
 
 
-AppSettingsType = TypeVar("T", bound=AppSettings)
+AppSettingsType = TypeVar("AppSettingsType", bound=AppSettings)

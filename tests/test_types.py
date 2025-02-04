@@ -1,12 +1,45 @@
 import boto3
 from moto import mock_aws
+from pydantic import BaseModel
 
+from cdktf_helpers.settings import computed_field
 from cdktf_helpers.settings.aws import (
     AwsResources,
     HostedZone,
     Subnet,
     Vpc,
 )
+
+
+def test_computed_field():
+    class Model(BaseModel):
+        name: str
+        age: int
+
+        @computed_field("Name and Age")
+        @property
+        def name_and_age(self) -> str:
+            return f"{self.name} is {self.age} years old"
+
+        @computed_field("Is person old?")
+        def is_old(self) -> str:
+            if self.age > 40:
+                return f"{self.name} is old!"
+            return f"{self.name} is still wet behind the ears"
+
+        @computed_field
+        def is_legend(self) -> bool:
+            return True
+
+    andy = Model(name="Andy", age=46)
+    # With a @property
+    assert andy.name_and_age == "Andy is 46 years old"
+
+    # Without a @propety
+    assert andy.is_old == "Andy is old!"
+
+    # No args decorator
+    assert andy.is_legend is True
 
 
 def test_collection():

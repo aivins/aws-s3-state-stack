@@ -59,7 +59,7 @@ arguments = ("testapp", "--environment", "dev", "--stack", "cli.Stack")
 
 
 def test_init_settings(workdir):
-    input = "\n".join(["vpc-12345abcd", "", '["horse"]', "hello"]) + "\n"
+    input = "\n".join(["", "red", '["horse"]', "hello"]) + "\n"
 
     with workdir():
         result = runner.invoke(
@@ -68,7 +68,15 @@ def test_init_settings(workdir):
         assert result.exit_code == 0
         result = runner.invoke(main, ["settings", "show", *arguments])
         data = parse_show_output(result.stdout)
-    assert "horse" in data["animals"]
+
+    assert data["vpc"]["value"]
+    assert data["vpc"]["origin"] == "default"
+
+    assert data["colour"]["value"] == "red"
+    assert data["colour"]["origin"] == "user"
+
+    assert "horse" in data["animals"]["value"]
+    assert data["animals"]["origin"] == "user"
 
 
 def test_show_settings(workdir):

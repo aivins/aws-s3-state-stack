@@ -3,8 +3,10 @@ from collections import UserList
 from functools import cached_property
 from typing import Annotated, Any, Generic, TypeVar
 
-from pydantic import BaseModel, StringConstraints, computed_field
+from pydantic import BaseModel, StringConstraints
 from pydantic_core import core_schema
+
+from cdktf_helpers.settings import computed_field
 
 from .utils import boto3_session
 
@@ -23,7 +25,7 @@ class AwsResource(BaseModel, ABC):
         return self.id
 
     def __eq__(self, other):
-        return other and isinstance(other, type(self)) and other.id == self.id
+        return other and isinstance(other, type(self)) and str(other) == str(self)
 
 
 AwsResourceType = TypeVar("AwsResourceType", bound=AwsResource)
@@ -59,7 +61,7 @@ class Subnet(AwsResource):
         resource.load()
         return resource
 
-    @computed_field
+    @computed_field()
     def cidr_block(self) -> str:
         return self.resource.cidr_block
 
