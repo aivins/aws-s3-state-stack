@@ -13,19 +13,15 @@ import pytest
 from moto import mock_aws
 from typer.testing import CliRunner
 
-from cdktf_helpers.cli import delete_settings, main
+from cdktf_helpers.cli import main
 
 runner = CliRunner()
 
 
 @pytest.fixture()
-def workdir(tmp_path, monkeypatch):
+def workdir(tmp_path):
     @contextmanager
     def _workdir(**overrides):
-        # if input:
-        #     input = "\n".join(input) + "\n"
-        #     monkeypatch.setattr("builtins.input", lambda _: input)
-        #     # monkeypatch.setattr("sys.stdin", StringIO(input))
         with mock_aws():
             source_dir = Path(__file__).parent
             with chdir(tmp_path):
@@ -41,15 +37,6 @@ def workdir(tmp_path, monkeypatch):
 
                 os.environ["COLUMNS"] = "1000"
 
-                # _get_terminal_size = shutil.get_terminal_size
-
-                # def get_terminal_size(*args, **kwargs):
-                #     terminal_size = _get_terminal_size(*args, **kwargs)
-                #     terminal_size.columns = 1000
-                #     return terminal_size
-
-                # monkeypatch.setattr("shutil.get_terminal_size", get_terminal_size)
-
                 yield tmp_path, settings
 
     return _workdir
@@ -59,7 +46,7 @@ arguments = ("testapp", "--environment", "dev", "--stack", "cli.Stack")
 
 
 def test_init_settings(workdir):
-    input = "\n".join(["", "red", '["horse"]', "hello"]) + "\n"
+    input = "\n".join(["", "red", '["horse", "battery"]', "hello"]) + "\n"
 
     with workdir():
         result = runner.invoke(
@@ -69,14 +56,26 @@ def test_init_settings(workdir):
         result = runner.invoke(main, ["settings", "show", *arguments])
         data = parse_show_output(result.stdout)
 
+    # Should have found a value and its marked as default
     assert data["vpc"]["value"]
     assert data["vpc"]["origin"] == "default"
 
+    # Strings should be read and marked user input
     assert data["colour"]["value"] == "red"
     assert data["colour"]["origin"] == "user"
 
+    # List input should be correct length and user input
+    assert len(data["animals"]["value"]) == 2
     assert "horse" in data["animals"]["value"]
     assert data["animals"]["origin"] == "user"
+
+    # String input with a user input origin
+    assert data["comment"]["value"] == "hello"
+    assert data["comment"]["origin"] == "user"
+
+    # Computed fields should be marked as such
+    assert data["comment_upper"]["value"] == "HELLO"
+    assert data["comment_upper"]["origin"] == "computed"
 
 
 def test_show_settings(workdir):

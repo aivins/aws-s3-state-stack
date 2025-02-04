@@ -28,18 +28,15 @@ class AwsResource(BaseModel, ABC):
         return other and isinstance(other, type(self)) and str(other) == str(self)
 
 
-AwsResourceType = TypeVar("AwsResourceType", bound=AwsResource)
-
-
-class AwsResources(UserList[AwsResourceType]):
+class AwsResources(UserList[Any]):
     @classmethod
     def __get_pydantic_core_schema__(cls, *args, **kwargs):
         return core_schema.list_schema()
 
-    def __contains__(self, resource_or_id: AwsResourceType):
+    def __contains__(self, resource_or_id: Any):
         if isinstance(resource_or_id, AwsResource):
             return super().__contains__(resource_or_id)
-        return resource_or_id in (r.id for r in self)
+        return resource_or_id in (str(r) for r in self)
 
 
 class Vpc(AwsResource):
