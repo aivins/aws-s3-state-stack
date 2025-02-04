@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "poetry run cdktf-python synth testapp",
+  "projectId": "cae12373-12c1-46ed-8a5a-774594bc98ab",
+  "sendCrashReports": "false",
+  "terraformProviders": [],
+  "terraformModules": [],
+  "codeMakerOutput": "imports",
+  "context": {
+    "stacks": [
+      "cli.Stack"
+    ]
+  }
+}

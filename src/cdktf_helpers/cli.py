@@ -22,9 +22,7 @@ from cdktf_helpers.settings.aws.utils import (
     get_all_settings,
 )
 
-from .settings.aws import (
-    ensure_backend_resources,
-)
+from .settings.aws import ensure_backend_resources
 
 
 def import_from_string(path):
@@ -200,7 +198,7 @@ for command, (create_command, help) in cdktf_commands.items():
     create_command(main, command, help)
 
 
-def initialise_settings(app, environment, settings_model, dry_run):
+def initialise_settings(app, environment, settings_model, dry_run=False):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     namespace = settings_model.format_namespace(app, environment)
     settings = fetch_settings(namespace)
@@ -223,7 +221,6 @@ def initialise_settings(app, environment, settings_model, dry_run):
 
         current_value_json = None
         if current_value:
-            breakpoint()
             current_value_json = json.dumps(current_value)
 
         def field_is(f, t):
@@ -365,7 +362,7 @@ def show(
     show_settings(app, environment, stack.get_settings_model())
 
 
-def delete_settings(app, environment, settings_model, dry_run):
+def delete_settings(app, environment, settings_model, dry_run=False):
     namespace = settings_model.format_namespace(app, environment)
 
     print(f"\nWARNING! You are about to delete all settings for {namespace}!")
