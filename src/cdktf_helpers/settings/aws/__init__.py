@@ -15,6 +15,7 @@ from .settings import AwsAppSettings, AwsAppSettingsType
 from .types import (
     AwsResource,
     AwsResources,
+    AwsResourceType,
     HostedZone,
     HostedZoneId,
     Subnet,
@@ -50,6 +51,7 @@ settings = [AwsAppSettings, AwsAppSettingsType]
 
 types = [
     AwsResource,
+    AwsResourceType,
     AwsResources,
     HostedZone,
     HostedZoneId,

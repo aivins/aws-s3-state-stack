@@ -9,6 +9,14 @@ from cdktf_helpers.settings.aws import (
 )
 
 
+def test_collection():
+    with mock_aws():
+        subnet1 = Subnet(id="subnet-123")
+        subnet2 = Subnet(id="subnet-456")
+        subnet3 = Subnet(id="subnet-789")
+        subnets: AwsResources[Subnet] = AwsResources([subnet1, subnet2])
+
+
 def test_type_equality():
     with mock_aws():
         assert Vpc(id="vpc-12345") == Vpc(id="vpc-12345")
@@ -20,7 +28,7 @@ def test_contains():
         subnet1 = Subnet(id="subnet-123")
         subnet2 = Subnet(id="subnet-456")
         subnet3 = Subnet(id="subnet-789")
-        subnets = AwsResources([subnet1, subnet2])
+        subnets: AwsResources[Subnet] = AwsResources([subnet1, subnet2])
         assert subnet1 in subnets
         assert subnet2 in subnets
         assert subnet3 not in subnets

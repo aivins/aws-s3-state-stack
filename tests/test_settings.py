@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 
 from cdktf_helpers.settings.aws import (
     AwsAppSettings,
+    AwsResources,
+    Subnet,
     SubnetsField,
+    Vpc,
     VpcField,
 )
 
@@ -104,8 +107,8 @@ def test_subnets_setting():
     with mock_aws():
 
         class Settings(BaseModel):
-            vpc: str = VpcField()
-            subnets: List[str] = SubnetsField()
+            vpc: Vpc = VpcField()
+            subnets: AwsResources[Subnet] = SubnetsField()
 
         settings = Settings()
         assert all(value.id.startswith("subnet-") for value in settings.subnets)
