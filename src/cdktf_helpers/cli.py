@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+from collections import UserList
 from functools import cache
 from pathlib import Path
 from typing import Annotated, List, Optional, get_origin
@@ -17,13 +18,9 @@ from pydantic_core import PydanticUndefined
 from rich import print
 from tabulate import tabulate
 
-from cdktf_helpers.settings.aws.utils import (
-    boto3_session,
-    fetch_settings,
-    get_all_settings,
-)
+from cdktf_helpers.settings.aws.utils import boto3_session
 
-from .settings.aws import ensure_backend_resources
+from .settings.aws import AwsResource, AwsResources, ensure_backend_resources
 
 
 def import_from_string(path):
@@ -218,18 +215,13 @@ for command, (create_command, help) in cdktf_commands.items():
 
 def initialise_settings(app, environment, settings_model, dry_run=False):
     """Interactive CLI prompts to initialise or update paramater store settings"""
-    namespace = settings_model.format_namespace(app, environment)
-    settings = fetch_settings(namespace)
-    updated = {}
-    for key, field in settings_model.model_fields.items():
+    settings = settings_model.model_construct(app, environment)
+    for key, field in settings.model_fields.items():
         if field.exclude:
             continue
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
-        if key in settings:
-            current_value = settings[key]
-        else:
-            current_value = None
+        current_value = getattr(settings, key, None)
 
         if current_value is None:
             if field.default is not PydanticUndefined:
@@ -244,52 +236,60 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
             else:
                 current_value_str = str(current_value)
 
-        def field_is(f, t):
-            result = False
-            if isinstance(f.annotation, type):
-                result = issubclass(f.annotation, t)
-            else:
-                result = get_origin(f.annotation) is t
-            return result
+        origin = get_origin(field.annotation) or field.annotation
 
-        str_input = field_is(field, str)
-        list_input = field_is(field, list)
+        # Check if the type is a lst type
+        field_is_list = False
+        field_is_resource = False
+        if issubclass(origin, (list, UserList)):
+            field_is_list = True
+        elif issubclass(origin, AwsResource):
+            field_is_resource = True
 
-        value = None
         default_msg = f" [{current_value_str}]" if current_value_str is not None else ""
-        list_msg = " as JSON list" if list_input else ""
+        list_msg = " as JSON list" if field_is_list else ""
 
         # Prompt interactively for new value for each key, with defaults
+        value = None
         print(f"{field.description} ({key})" or key)
-        while value in (None, ""):
+        while value is None:
             value = input(f"Enter value{list_msg}{default_msg}: ").strip()
-            if not value and current_value is not None:
+
+            if value == "" and current_value is not None:
+                # User supplied no value. If we already have one, either from
+                # defaults or because it was set in paramstore, it will be in
+                # the native type and needs no further processing
                 value = current_value
             else:
+                # User has supplied a string which needs parsing into the
+                # native type so we can handle and save it
                 validator = TypeAdapter(field.annotation)
                 try:
-                    if list_input:
-                        value = validator.validate_json(value)
-                    elif str_input:
-                        value = validator.validate_strings(value)
-                    else:
-                        # an object is expected, create it from a resource id
+                    if field_is_resource:
+                        # If the field is a resource, then the user
+                        # should have supplied an ID
                         value = field.annotation(id=value)
+                    if field_is_list:
+                        # If it's a list, we expect a JSON formatted string
+                        value = validator.validate_json(value)
+                    else:
+                        # Otherwise it's a string that can be coerced into
+                        # primitive type by pydantic
+                        value = validator.validate_strings(value)
                 except ValidationError as e:
-                    if "invalid json" in str(e).lower() and list_input:
+                    if "invalid json" in str(e).lower() and field_is_list:
                         print('Invalid list input. Try: ["val1","val2","val3"]')
                     else:
                         print(", ".join([x["msg"] for x in e.errors()]))
                     value = None
                     continue
         print()
-        updated[key] = value
+        setattr(settings, key, value)
 
-    settings = settings_model(app=app, environment=environment, **updated)
+    settings = settings.model_validate(settings)
 
     # Update paramstore with new values
-    namespace = settings_model.format_namespace(app, environment)
-    print(f"Saving settings to ParamterStore under '{namespace}'...\n")
+    print(f"Saving settings to ParamterStore under '{settings.namespace}'...\n")
     for key in settings.save(dry_run=dry_run):
         print(f"- {key}")
     if dry_run:
@@ -323,11 +323,7 @@ def show_settings(app, environment, settings_model):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings_data = get_all_settings(
-        app,
-        environment,
-        settings_model,
-    )
+    settings = settings_model.fetch_settings(app, environment)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
@@ -354,7 +350,7 @@ def show_settings(app, environment, settings_model):
         if exclude:
             continue
 
-        value = settings_data.get(key, None)
+        value = settings.get(key, None)
 
         is_default = value == str(default)
 

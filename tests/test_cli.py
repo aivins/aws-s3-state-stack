@@ -19,7 +19,7 @@ from cdktf_helpers.cli import main
 @pytest.fixture()
 def workdir(tmp_path):
     @contextmanager
-    def _workdir(**overrides):
+    def _workdir(create_settings=True, **overrides):
         with mock_aws():
             source_dir = Path(__file__).parent
             with chdir(tmp_path):
@@ -30,8 +30,10 @@ def workdir(tmp_path):
                     sys.path.insert(0, "")
                 from cli import Settings
 
-                settings = Settings(app="testapp", environment="dev", **overrides)
-                settings.save()
+                settings = None
+                if create_settings:
+                    settings = Settings(app="testapp", environment="dev", **overrides)
+                    settings.save()
 
                 os.environ["COLUMNS"] = "1000"
 
@@ -44,9 +46,9 @@ arguments = ("--environment", "dev")
 
 
 def test_init_settings(workdir):
-    input = "\n".join(["", "red", '["horse", "battery"]', "hello"]) + "\n"
+    input = "\n".join(["", "", "red", '["horse", "battery"]', "hello"]) + "\n"
 
-    with workdir():
+    with workdir(create_settings=False):
         runner = CliRunner()
         result = runner.invoke(
             main, ["settings", "init", *arguments], input=input, catch_exceptions=False

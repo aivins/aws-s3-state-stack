@@ -24,10 +24,9 @@ from .types import (
 )
 from .utils import (
     ensure_backend_resources,
-    get_all_settings,
 )
 
-defaults = [
+exported_defaults = [
     default_private_subnets,
     default_private_subnets,
     default_public_subnets,
@@ -38,7 +37,7 @@ defaults = [
     default_vpc,
 ]
 
-fields = [
+exported_fields = [
     PrivateSubnetsField,
     PublicSubnetsField,
     SubnetsField,
@@ -46,9 +45,9 @@ fields = [
     HostedZoneField,
 ]
 
-settings = [AwsAppSettings, AwsAppSettingsType]
+exported_settings = [AwsAppSettings, AwsAppSettingsType]
 
-types = [
+exported_types = [
     AwsResource,
     AwsResources,
     HostedZone,
@@ -59,10 +58,15 @@ types = [
     VpcId,
 ]
 
-utils = [
+exported_utils = [
     ensure_backend_resources,
-    get_all_settings,
 ]
 
 
-__all__ = [*defaults, *fields, *settings, *types, *utils]
+__all__ = [
+    *exported_defaults,
+    *exported_fields,
+    *exported_settings,
+    *exported_types,
+    *exported_utils,
+]

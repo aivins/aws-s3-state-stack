@@ -3,12 +3,20 @@ from typing import List
 from pydantic import Field
 
 from cdktf_helpers.settings import computed_field
-from cdktf_helpers.settings.aws import AwsAppSettings, Vpc, VpcField
+from cdktf_helpers.settings.aws import (
+    AwsAppSettings,
+    AwsResources,
+    Subnet,
+    SubnetsField,
+    Vpc,
+    VpcField,
+)
 from cdktf_helpers.stacks import AwsS3StateStack
 
 
 class Settings(AwsAppSettings):
     vpc: Vpc = VpcField()
+    subnets: AwsResources[str] = SubnetsField()
     colour: str = Field(default="green", description="Some random colour")
     animals: List[str] = Field(
         default=["Dog", "Cat", "Stegosaurus"], description="Some animals"

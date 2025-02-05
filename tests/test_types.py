@@ -47,7 +47,8 @@ def test_collection():
         subnet1 = Subnet(id="subnet-123")
         subnet2 = Subnet(id="subnet-456")
         subnet3 = Subnet(id="subnet-789")
-        subnets: AwsResources[Subnet] = AwsResources([subnet1, subnet2])
+        subnets: AwsResources[Subnet] = AwsResources([subnet1, subnet2, subnet3])
+        assert subnets.ids == ["subnet-123", "subnet-456"]
 
 
 def test_type_equality():

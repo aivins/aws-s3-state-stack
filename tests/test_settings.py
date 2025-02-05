@@ -46,6 +46,8 @@ def settings(ssm):
         foo: str = Field(description="Just foo")
         bar: str = Field(description="And bar")
         other: str
+        something_interesting: str = "not really"
+        something_else: str = "equally boring"
 
     yield TestSettings(app=TEST_APP, environment=TEST_ENV)
 
@@ -60,13 +62,34 @@ def vpc_and_subnets():
         yield vpc, subnets
 
 
-def test_aws_namespace(settings):
+def test_namespace(settings):
     assert settings.namespace == f"/{TEST_APP}/{TEST_ENV}"
 
 
 def test_settings(settings):
     assert settings.foo == "valueforfoo"
     assert settings.get_description("foo") == "Just foo"
+
+
+def test_as_dict(settings):
+    as_dict = settings.as_dict()
+    assert isinstance(as_dict, dict)
+    assert len(as_dict) == 5
+
+
+def test_as_dict_prefix(settings):
+    as_dict = settings.as_dict(prefix="something_")
+    assert len(as_dict) == 2
+    assert "something_interesting" in as_dict
+    assert "something_else" in as_dict
+
+
+def test_as_env(settings):
+    as_dict = settings.as_env(prefix="something_")
+    assert as_dict == [
+        {"name": "SOMETHING_INTERESTING", "value": "not really"},
+        {"name": "SOMETHING_ELSE", "value": "equally boring"},
+    ]
 
 
 def test_save_settings(ssm):

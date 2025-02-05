@@ -1,9 +1,11 @@
+import json
 from abc import ABC, abstractmethod
 from collections import UserList
 from functools import cached_property
-from typing import Annotated, Any, Generic, TypeVar
+from reprlib import repr
+from typing import Annotated, Any, Generic, Iterator, List, TypeVar
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 from pydantic_core import core_schema
 
 from cdktf_helpers.settings import computed_field
@@ -28,15 +30,73 @@ class AwsResource(BaseModel, ABC):
         return other and isinstance(other, type(self)) and str(other) == str(self)
 
 
-class AwsResources(UserList[Any]):
-    @classmethod
-    def __get_pydantic_core_schema__(cls, *args, **kwargs):
-        return core_schema.list_schema()
+AwsResourceType = TypeVar("AwsResourceType", bound=AwsResource)
+
+
+class AwsResources(BaseModel, Generic[AwsResourceType]):
+    _items: List[AwsResourceType] = Field(default_factory=list, exclude=True)
+
+    def __init__(self, initlist: List[AwsResourceType] = []):
+        self._validate(*initlist)
+        super().__init__()
+        self._items = initlist
+
+    @property
+    def ids(self):
+        return [str(r) for r in self._items]
+
+    def __getitem__(self, index: int) -> AwsResourceType:
+        return self._items[index]
+
+    def __setitem__(self, index: int, value: AwsResourceType):
+        self._items[index] = value
+
+    def __delitem__(self, index: int):
+        del self._items[index]
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __iter__(self) -> Iterator[AwsResourceType]:
+        return iter(self._items)
+
+    def append(self, item: AwsResourceType):
+        self._items.append(item)
+
+    def extend(self, items: List[AwsResourceType]):
+        self._items.extend(items)
+
+    def pop(self, index: int = -1) -> AwsResourceType:
+        return self._items.pop(index)
+
+    def clear(self):
+        self._items.clear()
+
+    def insert(self, index: int, item: AwsResourceType):
+        self._items.insert(index, item)
+
+    def remove(self, item: AwsResourceType):
+        self._items.remove(item)
+
+    def index(self, item: AwsResourceType) -> int:
+        return self._items.index(item)
+
+    def count(self, item: AwsResourceType) -> int:
+        return self._items.count(item)
+
+    def sort(self, *, key=None, reverse=False):
+        self._items.sort(key=key, reverse=reverse)
+
+    def reverse(self):
+        self._items.reverse()
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.ids})"
 
     def __contains__(self, resource_or_id: Any):
         if isinstance(resource_or_id, AwsResource):
-            return super().__contains__(resource_or_id)
-        return resource_or_id in (str(r) for r in self)
+            return resource_or_id in self._items
+        return resource_or_id in self.ids
 
 
 class Vpc(AwsResource):

@@ -1,5 +1,5 @@
 import functools
-from typing import TypeVar
+from typing import TypeVar, get_origin
 
 from pydantic import Field
 from pydantic import computed_field as pydantic_computed_field
@@ -43,6 +43,10 @@ class AppSettings(BaseSettings):
         return self.format_namespace(self.app, self.environment)
 
     @classmethod
+    def model_construct(cls, app, environment, **kwargs):
+        return super().model_construct(app=app, environment=environment, **kwargs)
+
+    @classmethod
     def get_model_fields(cls, include_computed=False):
         model_fields = {k: v for k, v in cls.model_fields.items() if not v.exclude}
         if include_computed:
@@ -52,13 +56,36 @@ class AppSettings(BaseSettings):
 
     @classmethod
     def format_namespace(cls, app: str, environment: str) -> str:
-        return f"/{app}/{environment}"
+        return f"/{app}/{environment}/"
+
+    @classmethod
+    def parse_value_for_field(cls, field_name, value):
+        origin = get_origin(field.annotation)
+
+    def serialize_value(self, field_name):
+        return getattr(self, field_name)
 
     def get_description(self, key):
         return self.model_fields[key].description or ""
 
     def save(self, dry_run=False):
         pass
+
+    def as_dict(self, prefix=""):
+        return {
+            k: getattr(self, k)
+            for k in self.get_model_fields(include_computed=True)
+            if k.startswith(prefix)
+        }
+
+    def as_env(self, prefix=""):
+        def value(v):
+            return str(v).lower() if isinstance(v, bool) else v
+
+        return [
+            {"name": k.upper(), "value": value(v)}
+            for k, v in self.as_dict(prefix).items()
+        ]
 
 
 AppSettingsType = TypeVar("AppSettingsType", bound=AppSettings)

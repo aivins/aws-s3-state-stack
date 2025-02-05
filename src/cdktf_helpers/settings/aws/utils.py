@@ -52,26 +52,5 @@ def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
     return (created, existing)
 
 
-def fetch_settings(namespace):
-    ssm = boto3_session().client("ssm")
-    paginator = ssm.get_paginator("get_parameters_by_path")
-    pages = paginator.paginate(Path=namespace, Recursive=True)
-    for page in pages:
-        for param in page.get("Parameters", []):
-            yield param
-
-
-def get_all_settings(app, environment, settings_model):
-    """Fetch all settings for the given settings model and app/environemnt from parameterstore"""
-
-    namespace = settings_model.format_namespace(app, environment)
-    settings = {}
-    for param in fetch_settings(namespace):
-        key = param["Name"][len(namespace) + 1 :]
-        value = param["Value"]
-        settings[key] = json.loads(value)
-    return settings
-
-
 def tags(obj):
     return {t["Key"]: t["Value"] for t in obj.resource.tags}

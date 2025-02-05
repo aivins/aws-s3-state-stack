@@ -18,7 +18,9 @@ def default_vpc():
 @cache
 def default_subnets():
     vpc = default_vpc().resource
-    return [types.Subnet(id=subnet.id) for subnet in vpc.subnets.all()]
+    return types.AwsResources(
+        [types.Subnet(id=subnet.id) for subnet in vpc.subnets.all()]
+    )
 
 
 def default_private_subnets():
@@ -26,10 +28,10 @@ def default_private_subnets():
     private_subnets = [
         s for s in subnets if "private" in tags(s).get("Name", "").lower()
     ]
-    return private_subnets or subnets
+    return types.AwsResources(private_subnets or subnets)
 
 
 def default_public_subnets():
     subnets = default_subnets()
     public_subnets = [s for s in subnets if "public" in tags(s).get("Name", "").lower()]
-    return public_subnets or subnets
+    return types.AwsResources(public_subnets or subnets)
