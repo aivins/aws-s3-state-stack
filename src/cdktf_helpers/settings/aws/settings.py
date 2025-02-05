@@ -25,8 +25,8 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         for page in pages:
             for param in page.get("Parameters", []):
                 field_name = param["Name"][len(prefix) :]
-                value = self.parse_value_for_field(field_name, param["Value"])
-                pass
+                value = json.loads(param["Value"])
+                settings[field_name] = value
         return settings
 
     def get_field_value(self, field, field_name):
@@ -64,11 +64,6 @@ class AwsAppSettings(AppSettings):
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (init_settings, ParameterStoreSettingsSource(settings_cls))
-
-    def __init__(self, *args, **kwargs):
-        pass
-        super().__init__(*args, **kwargs)
-        pass
 
     def serialize_value(self, field_name):
         value = getattr(self, field_name)

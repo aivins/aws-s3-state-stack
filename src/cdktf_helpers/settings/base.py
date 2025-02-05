@@ -58,10 +58,6 @@ class AppSettings(BaseSettings):
     def format_namespace(cls, app: str, environment: str) -> str:
         return f"/{app}/{environment}/"
 
-    @classmethod
-    def parse_value_for_field(cls, field_name, value):
-        origin = get_origin(field.annotation)
-
     def serialize_value(self, field_name):
         return getattr(self, field_name)
 

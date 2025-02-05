@@ -2,11 +2,10 @@ import json
 from abc import ABC, abstractmethod
 from collections import UserList
 from functools import cached_property
-from reprlib import repr
-from typing import Annotated, Any, Generic, Iterator, List, TypeVar
+from typing import Annotated, Any, Generic, List, TypeVar, get_args, get_origin
 
-from pydantic import BaseModel, Field, StringConstraints
-from pydantic_core import core_schema
+from pydantic import BaseModel, GetCoreSchemaHandler, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError, core_schema
 
 from cdktf_helpers.settings import computed_field
 
@@ -17,7 +16,31 @@ SubnetId = Annotated[str, StringConstraints(pattern=r"^subnet-[a-z0-9]+$")]
 HostedZoneId = Annotated[str, StringConstraints(pattern=r"^/hostedzone/[A-Z0-9]+$")]
 
 
-class AwsResource(BaseModel, ABC):
+class NestedResourceMixin:
+    @model_validator(mode="before")
+    @classmethod
+    def nested_resource(cls, data: Any) -> Any:
+        for field_name, field in cls.model_fields.items():
+            origin = get_origin(field.annotation) or field.annotation
+            is_class = isinstance(origin, type)
+            is_resource = is_class and issubclass(origin, AwsResource)
+            is_resource_list = is_class and issubclass(origin, AwsResources)
+            value = data.get(field_name, None)
+            if value is not None:
+                if is_resource and isinstance(value, str):
+                    value = origin(id=value)
+                elif is_resource_list and isinstance(value, list):
+                    type_args = get_args(field.annotation)
+                    resource_cls = next(
+                        arg for arg in type_args if issubclass(arg, AwsResource)
+                    )
+                    if resource_cls:
+                        value = [resource_cls(id=id) for id in value]
+            data[field_name] = value
+        return data
+
+
+class AwsResource(NestedResourceMixin, BaseModel, ABC):
     @property
     @abstractmethod
     def resource(self):
@@ -26,6 +49,9 @@ class AwsResource(BaseModel, ABC):
     def __str__(self):
         return self.id
 
+    def __repr__(self):
+        return f"{type(self).__name__}('{self.id})'"
+
     def __eq__(self, other):
         return other and isinstance(other, type(self)) and str(other) == str(self)
 
@@ -33,70 +59,36 @@ class AwsResource(BaseModel, ABC):
 AwsResourceType = TypeVar("AwsResourceType", bound=AwsResource)
 
 
-class AwsResources(BaseModel, Generic[AwsResourceType]):
-    _items: List[AwsResourceType] = Field(default_factory=list, exclude=True)
-
-    def __init__(self, initlist: List[AwsResourceType] = []):
-        self._validate(*initlist)
-        super().__init__()
-        self._items = initlist
-
+class AwsResources(UserList[AwsResourceType], Generic[AwsResourceType]):
     @property
     def ids(self):
-        return [str(r) for r in self._items]
+        return [str(r) for r in self]
 
-    def __getitem__(self, index: int) -> AwsResourceType:
-        return self._items[index]
+    @classmethod
+    def _validate(cls, value: Any, _) -> "AwsResources[AwsResourceType]":
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, list):
+            return cls(value)
+        raise ValueError(f"Expected list or {cls.__name__}, got {type(value)}")
 
-    def __setitem__(self, index: int, value: AwsResourceType):
-        self._items[index] = value
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        list_schema = handler.generate_schema(List[Any])
+        return core_schema.no_info_wrap_validator_function(cls._validate, list_schema)
 
-    def __delitem__(self, index: int):
-        del self._items[index]
-
-    def __len__(self) -> int:
-        return len(self._items)
-
-    def __iter__(self) -> Iterator[AwsResourceType]:
-        return iter(self._items)
-
-    def append(self, item: AwsResourceType):
-        self._items.append(item)
-
-    def extend(self, items: List[AwsResourceType]):
-        self._items.extend(items)
-
-    def pop(self, index: int = -1) -> AwsResourceType:
-        return self._items.pop(index)
-
-    def clear(self):
-        self._items.clear()
-
-    def insert(self, index: int, item: AwsResourceType):
-        self._items.insert(index, item)
-
-    def remove(self, item: AwsResourceType):
-        self._items.remove(item)
-
-    def index(self, item: AwsResourceType) -> int:
-        return self._items.index(item)
-
-    def count(self, item: AwsResourceType) -> int:
-        return self._items.count(item)
-
-    def sort(self, *, key=None, reverse=False):
-        self._items.sort(key=key, reverse=reverse)
-
-    def reverse(self):
-        self._items.reverse()
+    def __str__(self):
+        return json.dumps(self.ids)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.ids})"
+        return f"{type(self).__name__}({repr(self.ids)})"
 
     def __contains__(self, resource_or_id: Any):
         if isinstance(resource_or_id, AwsResource):
-            return resource_or_id in self._items
-        return resource_or_id in self.ids
+            return super().__contains__(resource_or_id)
+        return resource_or_id in (str(r) for r in self)
 
 
 class Vpc(AwsResource):

@@ -323,7 +323,7 @@ def show_settings(app, environment, settings_model):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings = settings_model.fetch_settings(app, environment)
+    settings = settings_model(app, environment)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))

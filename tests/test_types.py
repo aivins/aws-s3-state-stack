@@ -4,11 +4,34 @@ from pydantic import BaseModel
 
 from cdktf_helpers.settings import computed_field
 from cdktf_helpers.settings.aws import (
+    AwsResource,
     AwsResources,
     HostedZone,
     Subnet,
     Vpc,
 )
+
+
+def test_resource():
+    class Resource(AwsResource):
+        id: str
+
+        def resource(self):
+            return {"id": self.id}
+
+    class Parent(AwsResource):
+        id: str
+        thing: Resource
+        stuff: AwsResources[Resource]
+
+        def resource(self):
+            return {"id": self.id}
+
+    parent = Parent(id="blah", thing="12345", stuff=["abc", "def"])
+    assert isinstance(parent.thing, Resource)
+    assert parent.thing.id == "12345"
+    assert isinstance(parent.stuff, AwsResources)
+    assert all(isinstance(r, Resource) for r in parent.stuff)
 
 
 def test_computed_field():
@@ -48,7 +71,29 @@ def test_collection():
         subnet2 = Subnet(id="subnet-456")
         subnet3 = Subnet(id="subnet-789")
         subnets: AwsResources[Subnet] = AwsResources([subnet1, subnet2, subnet3])
-        assert subnets.ids == ["subnet-123", "subnet-456"]
+        assert subnets.ids == ["subnet-123", "subnet-456", "subnet-789"]
+        assert (
+            repr(subnets) == "AwsResources(['subnet-123', 'subnet-456', 'subnet-789'])"
+        )
+
+
+def test_collection_with_model():
+    with mock_aws():
+
+        class Model(BaseModel):
+            subnets: AwsResources[Subnet]
+
+        subnet1 = Subnet(id="subnet-123")
+        subnet2 = Subnet(id="subnet-456")
+        subnet3 = Subnet(id="subnet-789")
+
+        # Passed in as a plain list
+        instance = Model(subnets=[subnet1, subnet2, subnet3])
+        assert isinstance(instance.subnets, AwsResources)
+
+        # Passed in as AwsResources
+        instance = Model(subnets=AwsResources([subnet1, subnet2, subnet3]))
+        assert isinstance(instance.subnets, AwsResources)
 
 
 def test_type_equality():
