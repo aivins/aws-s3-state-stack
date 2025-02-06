@@ -1,6 +1,9 @@
+from typing import Any, Self
+
 import boto3
 from moto import mock_aws
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ModelWrapValidatorHandler, model_validator
+from pydantic_settings import BaseSettings
 
 from cdktf_helpers.settings import computed_field
 from cdktf_helpers.settings.aws import (
@@ -10,6 +13,40 @@ from cdktf_helpers.settings.aws import (
     Subnet,
     Vpc,
 )
+from cdktf_helpers.settings.aws.types import NestedResourceMixin
+
+
+def test_nested_resource_mixin():
+    class Resource(AwsResource):
+        @property
+        def resource(self):
+            return {}
+
+    class Settings(NestedResourceMixin, BaseSettings):
+        resource: Resource = Field(default_factory=lambda: Resource(id="123abc"))
+        resource_bare: Resource = Field(default_factory=lambda: "123abc-bare")
+
+        resources: AwsResources[Resource] = Field(
+            default_factory=lambda: AwsResources(
+                [Resource(id="456def"), Resource(id="789ghi")]
+            )
+        )
+        resources_bare: AwsResources[Resource] = Field(
+            default_factory=lambda: ["456def-bare", "789ghi-bare"]
+        )
+
+    settings = Settings()
+
+    assert isinstance(settings.resource, Resource)
+    assert settings.resource.id == "123abc"
+
+    assert isinstance(settings.resources, AwsResources)
+    assert isinstance(settings.resources[0], Resource)
+    assert settings.resources[0].id == "456def"
+    assert settings.resources[1].id == "789ghi"
+
+    assert isinstance(settings.resource_bare, Resource)
+    assert settings.resource_bare.id == "123abc-bare"
 
 
 def test_resource():
@@ -55,6 +92,7 @@ def test_computed_field():
             return True
 
     andy = Model(name="Andy", age=46)
+
     # With a @property
     assert andy.name_and_age == "Andy is 46 years old"
 

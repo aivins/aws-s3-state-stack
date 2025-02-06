@@ -1,5 +1,5 @@
 import functools
-from typing import TypeVar, get_origin
+from typing import List, TypeVar
 
 from pydantic import Field
 from pydantic import computed_field as pydantic_computed_field
@@ -31,11 +31,14 @@ def computed_field(arg, description="x", json_schema_extra={}, **kwargs):
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="allow", populate_by_name=True)
-    app: str = Field(exclude=True, default="app")
-    environment: str = Field(exclude=True, default="dev")
+    app: str
+    environment: str
 
-    def __init__(self, app: str, environment: str, **kwargs):
-        super().__init__(app=app, environment=environment, **kwargs)
+    _hidden_fields: list[str] = ["app", "environment", "namespace"]
+
+    @classmethod
+    def get_hidden_fields(self):
+        return self._hidden_fields
 
     @pydantic_computed_field
     @property
@@ -43,8 +46,10 @@ class AppSettings(BaseSettings):
         return self.format_namespace(self.app, self.environment)
 
     @classmethod
-    def model_construct(cls, app, environment, **kwargs):
-        return super().model_construct(app=app, environment=environment, **kwargs)
+    def model_dict(cls, app: str, environment: str, **kwargs):
+        return cls.model_construct(
+            app=app, environment=environment, **kwargs
+        ).model_dump(exclude=["namespace"])
 
     @classmethod
     def get_model_fields(cls, include_computed=False):

@@ -1,13 +1,21 @@
 import json
 from abc import ABC, abstractmethod
 from collections import UserList
+from copy import deepcopy
 from functools import cached_property
-from typing import Annotated, Any, Generic, List, TypeVar, get_args, get_origin
+from typing import Annotated, Any, Generic, List, Self, TypeVar, get_args, get_origin
 
-from pydantic import BaseModel, GetCoreSchemaHandler, StringConstraints, model_validator
-from pydantic_core import PydanticCustomError, core_schema
+from pydantic import (
+    BaseModel,
+    GetCoreSchemaHandler,
+    ModelWrapValidatorHandler,
+    StringConstraints,
+    model_validator,
+)
+from pydantic_core import PydanticUndefined, core_schema
 
 from cdktf_helpers.settings import computed_field
+from cdktf_helpers.utils import extract_default
 
 from .utils import boto3_session
 
@@ -17,30 +25,41 @@ HostedZoneId = Annotated[str, StringConstraints(pattern=r"^/hostedzone/[A-Z0-9]+
 
 
 class NestedResourceMixin:
-    @model_validator(mode="before")
+    @model_validator(mode="wrap")
     @classmethod
-    def nested_resource(cls, data: Any) -> Any:
-        for field_name, field in cls.model_fields.items():
-            origin = get_origin(field.annotation) or field.annotation
-            is_class = isinstance(origin, type)
-            is_resource = is_class and issubclass(origin, AwsResource)
-            is_resource_list = is_class and issubclass(origin, AwsResources)
-            value = data.get(field_name, None)
-            if value is not None:
-                if is_resource and isinstance(value, str):
-                    value = origin(id=value)
-                elif is_resource_list and isinstance(value, list):
-                    type_args = get_args(field.annotation)
-                    resource_cls = next(
-                        arg for arg in type_args if issubclass(arg, AwsResource)
-                    )
-                    if resource_cls:
-                        value = [resource_cls(id=id) for id in value]
-            data[field_name] = value
-        return data
+    def nested_resource(
+        cls, data: Any, handler: ModelWrapValidatorHandler[Self]
+    ) -> Self:
+        return_data = deepcopy(data)
+        if isinstance(data, dict):
+            for field_name, field in cls.model_fields.items():
+                origin = get_origin(field.annotation) or field.annotation
+                is_class = isinstance(origin, type)
+                is_resource = is_class and issubclass(origin, AwsResource)
+                is_resource_list = is_class and issubclass(origin, AwsResources)
+                value = data.get(
+                    field_name,
+                    extract_default(field),
+                )
+                if value is not None:
+                    if is_resource and isinstance(value, str):
+                        value = origin(id=value)
+                    elif is_resource_list and isinstance(value, list):
+                        type_args = get_args(field.annotation)
+                        resource_cls = next(
+                            arg for arg in type_args if issubclass(arg, AwsResource)
+                        )
+                        if resource_cls:
+                            value = AwsResources([resource_cls(id=id) for id in value])
+                    else:
+                        pass
+                return_data[field_name] = value
+        return handler(return_data)
 
 
-class AwsResource(NestedResourceMixin, BaseModel, ABC):
+class AwsResource(BaseModel, ABC):
+    id: str
+
     @property
     @abstractmethod
     def resource(self):
@@ -76,7 +95,7 @@ class AwsResources(UserList[AwsResourceType], Generic[AwsResourceType]):
     def __get_pydantic_core_schema__(
         cls, _, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
-        list_schema = handler.generate_schema(List[Any])
+        list_schema = handler.generate_schema(list[Any])
         return core_schema.no_info_wrap_validator_function(cls._validate, list_schema)
 
     def __str__(self):

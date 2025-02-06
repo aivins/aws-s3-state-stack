@@ -52,16 +52,6 @@ def settings(ssm):
     yield TestSettings(app=TEST_APP, environment=TEST_ENV)
 
 
-@pytest.fixture(scope="module")
-def vpc_and_subnets():
-    with mock_aws():
-        session = boto3.Session()
-        ec2 = session.resource("ec2")
-        vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")
-        subnets = [vpc.create_subnet(CidrBlock=f"10.0.{i}.0/25") for i in range(3)]
-        yield vpc, subnets
-
-
 def test_namespace(settings):
     assert settings.namespace == f"/{TEST_APP}/{TEST_ENV}"
 
@@ -69,6 +59,23 @@ def test_namespace(settings):
 def test_settings(settings):
     assert settings.foo == "valueforfoo"
     assert settings.get_description("foo") == "Just foo"
+
+
+# def test_resource_type_coercion():
+#     class TestSettings(AwsAppSettings):
+#         vpc: Vpc = VpcField()
+#         subnets: AwsResources[Subnet] = SubnetsField()
+#         required_field: str
+
+#     with mock_aws():
+#         # input_data = {
+#         #     "vpc": "vpc-abcd1234",
+#         #     "subnets": ["subnet-a123", "subnet-b456", "subnet-c789"],
+#         # }
+#         input_data = {"required_field": "sausages"}
+#         settings_dict = TestSettings.model_dict("app", "dev", **input_data)
+#         settings = TestSettings.model_validate(settings_dict)
+#         pass
 
 
 def test_as_dict(settings):

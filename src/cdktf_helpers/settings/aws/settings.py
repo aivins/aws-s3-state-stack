@@ -7,7 +7,7 @@ from pydantic_settings import (
 )
 
 from ..base import AppSettings
-from .types import AwsResource, AwsResources
+from .types import AwsResource, AwsResources, NestedResourceMixin
 from .utils import boto3_session
 
 
@@ -54,7 +54,7 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
         return self._settings
 
 
-class AwsAppSettings(AppSettings):
+class AwsAppSettings(NestedResourceMixin, AppSettings):
     @classmethod
     def settings_customise_sources(
         cls,

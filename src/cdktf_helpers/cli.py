@@ -19,6 +19,7 @@ from rich import print
 from tabulate import tabulate
 
 from cdktf_helpers.settings.aws.utils import boto3_session
+from cdktf_helpers.utils import extract_default
 
 from .settings.aws import AwsResource, AwsResources, ensure_backend_resources
 
@@ -160,7 +161,7 @@ def synth_cdktf_app(
 @main.command(help="Synthesize app directly without invoking cdktf")
 def synth(
     app: Annotated[str, app_arg],
-    stacks: Annotated[Optional[List[str]], stacks_arg],
+    stacks: Annotated[Optional[list[str]], stacks_arg],
     environment: Annotated[Optional[str], env_arg],
 ):
     synth_cdktf_app(app, environment, *stacks)
@@ -168,7 +169,7 @@ def synth(
 
 def cdktf_multi_stack(parent, command, help):
     def wrapper(
-        stacks: Annotated[Optional[List[str]], stacks_arg],
+        stacks: Annotated[Optional[list[str]], stacks_arg],
         environment: Annotated[Optional[str], env_arg],
     ):
         os.environ["CDKTF_APP_ENVIRONMENT"] = environment
@@ -323,7 +324,7 @@ def show_settings(app, environment, settings_model):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings = settings_model(app, environment)
+    settings = settings_model.model_dict(app, environment)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
@@ -331,16 +332,6 @@ def show_settings(app, environment, settings_model):
     table_data = []
     for key, field in settings_model.get_model_fields(include_computed=True).items():
         exclude = field.exclude if hasattr(field, "exclude") else False
-        default = (
-            field.default
-            if getattr(field, "default", None) not in (None, PydanticUndefined)
-            else None
-        )
-        default = (
-            field.default_factory()
-            if not default and getattr(field, "default_factory", None)
-            else default
-        )
         required = field.is_required() if hasattr(field, "is_required") else False
         computed = not hasattr(field, "exclude")
         description = field.description or (
@@ -350,14 +341,17 @@ def show_settings(app, environment, settings_model):
         if exclude:
             continue
 
+        default_value = extract_default(field)
         value = settings.get(key, None)
 
-        is_default = value == str(default)
+        is_default = value == default_value
 
         if value is None:
             value = "*missing*"
+        elif isinstance(value, AwsResources):
+            value = str(value.ids)
         else:
-            value = json.dumps(value)
+            value = str(value)
 
         if computed:
             value = f"{value} (computed)"

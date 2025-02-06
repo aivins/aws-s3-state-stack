@@ -16,9 +16,9 @@ from cdktf_helpers.stacks import AwsS3StateStack
 
 class Settings(AwsAppSettings):
     vpc: Vpc = VpcField()
-    subnets: AwsResources[str] = SubnetsField()
+    subnets: AwsResources[Subnet] = SubnetsField()
     colour: str = Field(default="green", description="Some random colour")
-    animals: List[str] = Field(
+    animals: list[str] = Field(
         default=["Dog", "Cat", "Stegosaurus"], description="Some animals"
     )
     comment: str = Field(default="", description="Just an extra comment")

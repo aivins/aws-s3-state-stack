@@ -12,13 +12,13 @@ def default_vpc():
     vpc = response["Vpcs"][0] if response["Vpcs"] else None
     if not vpc:
         raise TypeError("No default VPC found")
-    return types.Vpc(id=vpc["VpcId"])
+    return vpc["VpcId"]
 
 
 @cache
 def default_subnets():
-    vpc = default_vpc().resource
-    return [types.Subnet(id=subnet.id) for subnet in vpc.subnets.all()]
+    vpc = types.Vpc(id=default_vpc()).resource
+    return [subnet.id for subnet in vpc.subnets.all()]
 
 
 def default_private_subnets():

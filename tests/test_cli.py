@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 from contextlib import chdir, contextmanager
+from functools import partial
 from io import StringIO
 from pathlib import Path
 from typing import List
@@ -79,13 +80,16 @@ def test_init_settings(workdir):
     assert data["comment_upper"]["origin"] == "computed"
 
 
+def get_runner():
+    runner = CliRunner()
+    invoke = partial(runner.invoke, main, catch_exceptions=False)
+    return invoke
+
+
 def test_show_settings(workdir):
     with workdir():
-        runner = CliRunner()
-        result = runner.invoke(
-            main,
-            ["settings", "show", *arguments],
-        )
+        invoke = get_runner()
+        result = invoke(["settings", "show", *arguments])
         data = parse_show_output(result.stdout)
         assert data["vpc"]["value"].startswith("vpc-")
 
@@ -97,6 +101,7 @@ def test_delete_settings(workdir):
             main,
             ["settings", "delete", *arguments],
             input="y\ny\n",
+            catch_exceptions=False,
         )
         assert result.exit_code == 0
         assert "Deleted 5 of 5 parameters" in result.stdout
@@ -124,6 +129,9 @@ def parse_show_output(output):
         if match:
             value = value[: -len(match.group(0))]
             origin = match.group(1)
-        value = json.loads(value)
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            pass
         data[key] = {"value": value, "origin": origin}
     return data
