@@ -33,22 +33,23 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
                 value = param["Value"]
                 params[field_name] = json.loads(value)
         self._params = params
+        return self._params
 
     def get_field_value(self, field, field_name):
-        assert False
-        # self.fetch_params()
-        # if field_name not in self._params:
-        #     return None, field_name, False
-        # value = json.loads(self._params[field_name])
-
-        # return value
+        # We don't seem to end up calling this at all, but it's
+        # required by the ABC. Throw out a message in case this
+        # ends up being wrong
+        assert False, (
+            "ParameterStoreSettingsSource.get_field_value() "
+            "not implemented and called unexpectedly"
+        )
 
     def __call__(self):
-        self.fetch_params()
+        params = self.fetch_params()
         settings = {}
         for field_name, _ in self.settings_cls.model_fields.items():
-            if field_name in self._params:
-                settings[field_name] = self._params[field_name]
+            if field_name in params:
+                settings[field_name] = params[field_name]
         return settings
 
 
