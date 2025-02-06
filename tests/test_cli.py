@@ -61,8 +61,6 @@ def test_init_settings(workdir):
         assert result.exit_code == 0
 
         data = settings_model.fetch_settings("testapp", "dev")
-        # result = invoke(["settings", "show", *arguments])
-        # data = parse_show_output(result.stdout)
 
     assert "vpc" in data
 

@@ -215,23 +215,17 @@ for command, (create_command, help) in cdktf_commands.items():
 
 
 def initialise_settings(app, environment, settings_model, dry_run=False):
-    """Interactive CLI prompts to initialise or update paramater store settings"""
-    settings = settings_model.model_dict(app, environment)
-    breakpoint()
-    hidden_fields = settings_model.get_hidden_fields()
-    for key, field in settings_model.model_fields.items():
-        if key in hidden_fields:
-            continue
+    """Interactive CLI prompts to initialise or update parameter store settings"""
+
+    # Get a dict of settings with parmeterstore params and defaults applied
+    settings = settings_model.settings_dict(app, environment)
+
+    for key, field in settings_model.get_model_fields().items():
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
         current_value = settings.get(key, None)
 
-        if current_value is None:
-            if field.default is not PydanticUndefined:
-                current_value = field.default
-            elif field.default_factory:
-                current_value = field.default_factory()
-
+        # Build a string of the current value to show in the prompt
         current_value_str = None
         if current_value is not None:
             if isinstance(current_value, list):
@@ -239,9 +233,8 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
             else:
                 current_value_str = str(current_value)
 
+        # Check if the type is a list or resource type
         origin = get_origin(field.annotation) or field.annotation
-
-        # Check if the type is a lst type
         field_is_list = False
         field_is_resource = False
         if issubclass(origin, (list, UserList)):
@@ -249,11 +242,10 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         elif issubclass(origin, AwsResource):
             field_is_resource = True
 
-        default_msg = f" [{current_value_str}]" if current_value_str is not None else ""
-        list_msg = " as JSON list" if field_is_list else ""
-
         # Prompt interactively for new value for each key, with defaults
         value = None
+        default_msg = f" [{current_value_str}]" if current_value_str is not None else ""
+        list_msg = " as JSON list" if field_is_list else ""
         print(f"{field.description} ({key})" or key)
         while value is None:
             value = input(f"Enter value{list_msg}{default_msg}: ").strip()
@@ -289,7 +281,8 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         settings[key] = value
         print()
 
-    breakpoint()
+    # Model should by valid at this point. It'll throw an exception otherwise
+    # but at least we won't save bad data
     settings = settings_model.model_validate(settings)
 
     # Update paramstore with new values
@@ -327,9 +320,7 @@ def show_settings(app, environment, settings_model):
         int(col_width * terminal_width / 100) for col_width in col_percent_widths
     ]
 
-    settings = settings_model.model_dict(app, environment)
-
-    breakpoint()
+    settings_dict = settings_model.settings_dict(app, environment)
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))
@@ -347,7 +338,7 @@ def show_settings(app, environment, settings_model):
             continue
 
         default_value = extract_default(field)
-        value = settings.get(key, None)
+        value = settings_dict.get(key, None)
 
         is_default = value == default_value
 

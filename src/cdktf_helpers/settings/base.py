@@ -1,8 +1,9 @@
 import functools
-from typing import List, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import Field
 from pydantic import computed_field as pydantic_computed_field
+from pydantic_core import PydanticUndefined
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -37,8 +38,8 @@ class AppSettings(BaseSettings):
     _hidden_fields: list[str] = ["app", "environment", "namespace"]
 
     @classmethod
-    def get_hidden_fields(self):
-        return self._hidden_fields.default
+    def get_hidden_fields(cls):
+        return cls._hidden_fields.default
 
     @pydantic_computed_field
     @property
@@ -46,17 +47,32 @@ class AppSettings(BaseSettings):
         return self.format_namespace(self.app, self.environment)
 
     @classmethod
-    def model_dict(cls, app: str, environment: str, **kwargs):
-        settings = cls.model_construct(app=app, environment=environment, **kwargs)
-        breakpoint()
-        return {k: getattr(settings, k, None) for k in cls.model_fields}
+    def settings_dict(
+        cls, app: str, environment: str, *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:
+        partial_settings = super().model_construct(*args, **kwargs)
+        source_data = partial_settings._settings_build_values(
+            {"app": app, "environment": environment}
+        )
+        settings = {}
+        for field_name, field in cls.model_fields.items():
+            value = source_data.get(field_name, None)
+            if value is None:
+                if field.default is not PydanticUndefined:
+                    value = field.default
+                elif field.default_factory:
+                    value = field.default_factory()
+            settings[field_name] = value
+        return settings
 
     @classmethod
     def get_model_fields(cls, include_computed=False):
-        model_fields = {k: v for k, v in cls.model_fields.items() if not v.exclude}
+        hidden_fields = cls.get_hidden_fields()
+        model_fields = {
+            k: v for k, v in cls.model_fields.items() if k not in hidden_fields
+        }
         if include_computed:
             model_fields = {**model_fields, **cls.model_computed_fields}
-        model_fields.pop("namespace", None)
         return model_fields
 
     @classmethod

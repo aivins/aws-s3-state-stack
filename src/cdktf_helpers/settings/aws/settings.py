@@ -25,36 +25,45 @@ def fetch_settings(prefix):
 
 
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
-    def __init__(self, settings_cls, *args, **kwargs):
-        super().__init__(settings_cls, *args, **kwargs)
-        self._settings = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._params = None
 
-    def fetch_settings(self, app, environment):
-        return self.settings_cls.fetch_settings(app, environment)
-
-    def get_field_value(self, field, field_name):
-        if field.exclude or field_name not in self._settings:
-            return None, "", False
-
-        return (
-            self._settings[field_name],
-            field_name,
-            True,
-        )
-
-    def __call__(self):
+    def fetch_params(self) -> None:
+        if self._params:
+            return self._params
         source = self.settings_sources_data["InitSettingsSource"]
         app = source["app"]
         environment = source["environment"]
-        if not self._settings:
-            self._settings = self.fetch_settings(app, environment)
-        for field_name, field in self.settings_cls.model_fields.items():
-            field_value, field_key, value_is_complex = self.get_field_value(
-                field, field_name
-            )
-            if field_key:
-                self._settings[field_key] = field_value
-        return self._settings
+        prefix = self.settings_cls.format_namespace(app, environment)
+        ssm = boto3_session().client("ssm")
+        paginator = ssm.get_paginator("get_parameters_by_path")
+        pages = paginator.paginate(Path=prefix, Recursive=True)
+        params = {}
+        for page in pages:
+            for param in page.get("Parameters", []):
+                field_name = param["Name"][len(prefix) :]
+                value = param["Value"]
+                params[field_name] = json.loads(value)
+        self._params = params
+        return self._params
+
+    def get_field_value(self, field, field_name):
+        # We don't seem to end up calling this at all, but it's
+        # required by the ABC. Throw out a message in case this
+        # ends up being wrong
+        assert False, (
+            "ParameterStoreSettingsSource.get_field_value() "
+            "not implemented and called unexpectedly"
+        )
+
+    def __call__(self):
+        params = self.fetch_params()
+        settings = {}
+        for field_name, _ in self.settings_cls.model_fields.items():
+            if field_name in params:
+                settings[field_name] = params[field_name]
+        return settings
 
 
 class AwsAppSettings(NestedResourceMixin, AppSettings):
@@ -66,7 +75,6 @@ class AwsAppSettings(NestedResourceMixin, AppSettings):
         *args,
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        breakpoint()
         return (init_settings, ParameterStoreSettingsSource(settings_cls))
 
     @classmethod
@@ -81,7 +89,6 @@ class AwsAppSettings(NestedResourceMixin, AppSettings):
                 field_name = param["Name"][len(prefix) :]
                 value = json.loads(param["Value"])
                 settings[field_name] = value
-        breakpoint()
         return settings
 
     def serialize_value(self, field_name):

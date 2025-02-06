@@ -53,7 +53,7 @@ def settings(ssm):
 
 
 def test_namespace(settings):
-    assert settings.namespace == f"/{TEST_APP}/{TEST_ENV}"
+    assert settings.namespace == f"/{TEST_APP}/{TEST_ENV}/"
 
 
 def test_settings(settings):
