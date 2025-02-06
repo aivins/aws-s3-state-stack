@@ -217,8 +217,9 @@ for command, (create_command, help) in cdktf_commands.items():
 def initialise_settings(app, environment, settings_model, dry_run=False):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     settings = settings_model.model_dict(app, environment)
+    hidden_fields = settings_model.get_hidden_fields()
     for key, field in settings_model.model_fields.items():
-        if field.exclude:
+        if key in hidden_fields:
             continue
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
@@ -287,7 +288,7 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         settings[key] = value
         print()
 
-    settings = settings.model_validate(settings)
+    settings = settings_model.model_validate(settings)
 
     # Update paramstore with new values
     print(f"Saving settings to ParamterStore under '{settings.namespace}'...\n")

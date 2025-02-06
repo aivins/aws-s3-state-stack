@@ -38,7 +38,7 @@ class AppSettings(BaseSettings):
 
     @classmethod
     def get_hidden_fields(self):
-        return self._hidden_fields
+        return self._hidden_fields.default
 
     @pydantic_computed_field
     @property

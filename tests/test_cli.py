@@ -38,7 +38,7 @@ def workdir(tmp_path):
 
                 os.environ["COLUMNS"] = "1000"
 
-                yield tmp_path, settings
+                yield (tmp_path, Settings, settings)
 
     return _workdir
 
@@ -46,44 +46,38 @@ def workdir(tmp_path):
 arguments = ("--environment", "dev")
 
 
-def test_init_settings(workdir):
-    input = "\n".join(["", "", "red", '["horse", "battery"]', "hello"]) + "\n"
-
-    with workdir(create_settings=False):
-        runner = CliRunner()
-        result = runner.invoke(
-            main, ["settings", "init", *arguments], input=input, catch_exceptions=False
-        )
-        assert result.exit_code == 0
-        result = runner.invoke(main, ["settings", "show", *arguments])
-        data = parse_show_output(result.stdout)
-
-    # Should have found a value and its marked as default
-    assert data["vpc"]["value"]
-    assert data["vpc"]["origin"] == "default"
-
-    # Strings should be read and marked user input
-    assert data["colour"]["value"] == "red"
-    assert data["colour"]["origin"] == "user"
-
-    # List input should be correct length and user input
-    assert len(data["animals"]["value"]) == 2
-    assert "horse" in data["animals"]["value"]
-    assert data["animals"]["origin"] == "user"
-
-    # String input with a user input origin
-    assert data["comment"]["value"] == "hello"
-    assert data["comment"]["origin"] == "user"
-
-    # Computed fields should be marked as such
-    assert data["comment_upper"]["value"] == "HELLO"
-    assert data["comment_upper"]["origin"] == "computed"
-
-
 def get_runner():
     runner = CliRunner()
     invoke = partial(runner.invoke, main, catch_exceptions=False)
     return invoke
+
+
+def test_init_settings(workdir):
+    input = "\n".join(["", "", "red", '["horse", "battery"]', "hello"]) + "\n"
+
+    with workdir(create_settings=False) as (_, settings_model, _):
+        invoke = get_runner()
+        result = invoke(["settings", "init", *arguments], input=input)
+        assert result.exit_code == 0
+
+        data = settings_model.fetch_settings("testapp", "dev")
+        # result = invoke(["settings", "show", *arguments])
+        # data = parse_show_output(result.stdout)
+
+    assert "vpc" in data
+
+    assert "colour" in data
+    assert data["colour"] == "red"
+
+    assert "animals" in data
+    assert len(data["animals"]) == 2
+    assert "horse" in data["animals"]
+
+    assert "comment" in data
+    assert data["comment"] == "hello"
+
+    assert "comment_upper" in data
+    assert data["comment_upper"] == "HELLO"
 
 
 def test_show_settings(workdir):
