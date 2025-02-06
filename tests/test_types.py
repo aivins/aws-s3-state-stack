@@ -184,4 +184,6 @@ def test_hosted_zone():
         route53 = boto3.Session().client("route53")
         response = route53.create_hosted_zone(Name="blah.com", CallerReference="dummy")
         zone = HostedZone(id=response["HostedZone"]["Id"])
+        assert zone.id == response["HostedZone"]["Id"].replace("/hostedzone/", "")
+        assert zone.long_id == response["HostedZone"]["Id"]
         assert zone.name == "blah.com."

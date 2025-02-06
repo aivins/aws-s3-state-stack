@@ -1,18 +1,20 @@
 import json
+import re
 from abc import ABC, abstractmethod
 from collections import UserList
 from copy import deepcopy
 from functools import cached_property
-from typing import Annotated, Any, Generic, List, Self, TypeVar, get_args, get_origin
+from typing import Annotated, Any, Generic, Self, TypeVar, get_args, get_origin
 
 from pydantic import (
     BaseModel,
     GetCoreSchemaHandler,
     ModelWrapValidatorHandler,
     StringConstraints,
+    field_validator,
     model_validator,
 )
-from pydantic_core import PydanticUndefined, core_schema
+from pydantic_core import core_schema
 
 from cdktf_helpers.settings import computed_field
 from cdktf_helpers.utils import extract_default
@@ -21,7 +23,7 @@ from .utils import boto3_session
 
 VpcId = Annotated[str, StringConstraints(pattern=r"^vpc-[a-z0-9]+$")]
 SubnetId = Annotated[str, StringConstraints(pattern=r"^subnet-[a-z0-9]+$")]
-HostedZoneId = Annotated[str, StringConstraints(pattern=r"^/hostedzone/[A-Z0-9]+$")]
+HostedZoneId = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9]+$")]
 
 
 class NestedResourceMixin:
@@ -136,11 +138,20 @@ class Subnet(AwsResource):
 class HostedZone(AwsResource):
     id: HostedZoneId
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def strip_id_prefix(cls, value: str) -> str:
+        return re.sub(r"^/hostedzone/", "", value)
+
     @cached_property
     def resource(self):
         route53 = boto3_session().client("route53")
         response = route53.get_hosted_zone(Id=self.id)
         return response["HostedZone"]
+
+    @computed_field
+    def long_id(self) -> str:
+        return f"/hostedzone/{self.id}"
 
     @computed_field
     def name(self) -> str:
