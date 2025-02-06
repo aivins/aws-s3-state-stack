@@ -96,7 +96,7 @@ def test_delete_settings(workdir):
             catch_exceptions=False,
         )
         assert result.exit_code == 0
-        assert "Deleted 8 of 8 parameters" in result.stdout
+        assert "Deleted 6 of 6 parameters" in result.stdout
 
 
 def parse_show_output(output):

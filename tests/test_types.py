@@ -1,28 +1,32 @@
-from typing import Any, Self
-
 import boto3
 from moto import mock_aws
-from pydantic import BaseModel, Field, ModelWrapValidatorHandler, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, Field
 
 from cdktf_helpers.settings import computed_field
 from cdktf_helpers.settings.aws import (
+    AwsAppSettings,
     AwsResource,
     AwsResources,
     HostedZone,
     Subnet,
     Vpc,
 )
-from cdktf_helpers.settings.aws.types import NestedResourceMixin
 
 
 def test_nested_resource_mixin():
-    class Resource(AwsResource):
+    class SubResource(AwsResource):
         @property
         def resource(self):
             return {}
 
-    class Settings(NestedResourceMixin, BaseSettings):
+    class Resource(AwsResource):
+        sub_resource: SubResource = Field(default_factory=lambda: "xyz890")
+
+        @property
+        def resource(self):
+            return {}
+
+    class Settings(AwsAppSettings):
         resource: Resource = Field(default_factory=lambda: Resource(id="123abc"))
         resource_bare: Resource = Field(default_factory=lambda: "123abc-bare")
 
@@ -35,18 +39,22 @@ def test_nested_resource_mixin():
             default_factory=lambda: ["456def-bare", "789ghi-bare"]
         )
 
-    settings = Settings()
+    with mock_aws():
+        settings = Settings(app="testapp", environment="dev")
 
-    assert isinstance(settings.resource, Resource)
-    assert settings.resource.id == "123abc"
+        assert isinstance(settings.resource, Resource)
+        assert settings.resource.id == "123abc"
 
-    assert isinstance(settings.resources, AwsResources)
-    assert isinstance(settings.resources[0], Resource)
-    assert settings.resources[0].id == "456def"
-    assert settings.resources[1].id == "789ghi"
+        assert isinstance(settings.resource.sub_resource, SubResource)
+        assert settings.resource.sub_resource.id == "xyz890"
 
-    assert isinstance(settings.resource_bare, Resource)
-    assert settings.resource_bare.id == "123abc-bare"
+        assert isinstance(settings.resources, AwsResources)
+        assert isinstance(settings.resources[0], Resource)
+        assert settings.resources[0].id == "456def"
+        assert settings.resources[1].id == "789ghi"
+
+        assert isinstance(settings.resource_bare, Resource)
+        assert settings.resource_bare.id == "123abc-bare"
 
 
 def test_resource():

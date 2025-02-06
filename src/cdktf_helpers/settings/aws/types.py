@@ -37,10 +37,9 @@ class NestedResourceMixin:
                 is_class = isinstance(origin, type)
                 is_resource = is_class and issubclass(origin, AwsResource)
                 is_resource_list = is_class and issubclass(origin, AwsResources)
-                value = data.get(
-                    field_name,
-                    extract_default(field),
-                )
+                value = data.get(field_name, None)
+                if not value:
+                    value = extract_default(field)
                 if value is not None:
                     if is_resource and isinstance(value, str):
                         value = origin(id=value)
@@ -57,7 +56,7 @@ class NestedResourceMixin:
         return handler(return_data)
 
 
-class AwsResource(BaseModel, ABC):
+class AwsResource(NestedResourceMixin, BaseModel, ABC):
     id: str
 
     @property

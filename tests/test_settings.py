@@ -125,10 +125,10 @@ def test_save_settings(ssm):
 def test_vpc_setting():
     with mock_aws():
 
-        class Settings(BaseModel):
-            vpc: str = VpcField()
+        class Settings(AwsAppSettings):
+            vpc: Vpc = VpcField()
 
-        settings = Settings()
+        settings = Settings(app="testapp", environment="dev")
 
         assert settings.vpc.id.startswith("vpc-")
 
@@ -136,9 +136,9 @@ def test_vpc_setting():
 def test_subnets_setting():
     with mock_aws():
 
-        class Settings(BaseModel):
+        class Settings(AwsAppSettings):
             vpc: Vpc = VpcField()
             subnets: AwsResources[Subnet] = SubnetsField()
 
-        settings = Settings()
+        settings = Settings(app="testapp", environment="dev")
         assert all(value.id.startswith("subnet-") for value in settings.subnets)

@@ -69,11 +69,10 @@ class AppSettings(BaseSettings):
     def get_model_fields(cls, include_computed=False):
         hidden_fields = cls.get_hidden_fields()
         model_fields = {
-            k: v for k, v in cls.model_fields.items() if k not in hidden_fields
+            **cls.model_fields,
+            **(cls.model_computed_fields if include_computed else {}),
         }
-        if include_computed:
-            model_fields = {**model_fields, **cls.model_computed_fields}
-        return model_fields
+        return {k: v for k, v in model_fields.items() if k not in hidden_fields}
 
     @classmethod
     def format_namespace(cls, app: str, environment: str) -> str:
