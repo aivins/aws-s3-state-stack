@@ -11,23 +11,26 @@ from .types import AwsResource, AwsResources, NestedResourceMixin
 from .utils import boto3_session
 
 
+def fetch_settings(prefix):
+    ssm = boto3_session().client("ssm")
+    paginator = ssm.get_paginator("get_parameters_by_path")
+    pages = paginator.paginate(Path=prefix, Recursive=True)
+    settings = {}
+    for page in pages:
+        for param in page.get("Parameters", []):
+            field_name = param["Name"][len(prefix) :]
+            value = json.loads(param["Value"])
+            settings[field_name] = value
+    return settings
+
+
 class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
     def __init__(self, settings_cls, *args, **kwargs):
         super().__init__(settings_cls, *args, **kwargs)
         self._settings = None
 
     def fetch_settings(self, app, environment):
-        prefix = self.settings_cls.format_namespace(app, environment)
-        ssm = boto3_session().client("ssm")
-        paginator = ssm.get_paginator("get_parameters_by_path")
-        pages = paginator.paginate(Path=prefix, Recursive=True)
-        settings = {}
-        for page in pages:
-            for param in page.get("Parameters", []):
-                field_name = param["Name"][len(prefix) :]
-                value = json.loads(param["Value"])
-                settings[field_name] = value
-        return settings
+        return self.settings_cls.fetch_settings(app, environment)
 
     def get_field_value(self, field, field_name):
         if field.exclude or field_name not in self._settings:
@@ -64,6 +67,20 @@ class AwsAppSettings(NestedResourceMixin, AppSettings):
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (init_settings, ParameterStoreSettingsSource(settings_cls))
+
+    @classmethod
+    def fetch_settings(cls, app, environment):
+        prefix = cls.format_namespace(app, environment)
+        ssm = boto3_session().client("ssm")
+        paginator = ssm.get_paginator("get_parameters_by_path")
+        pages = paginator.paginate(Path=prefix, Recursive=True)
+        settings = {}
+        for page in pages:
+            for param in page.get("Parameters", []):
+                field_name = param["Name"][len(prefix) :]
+                value = json.loads(param["Value"])
+                settings[field_name] = value
+        return settings
 
     def serialize_value(self, field_name):
         value = getattr(self, field_name)

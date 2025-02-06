@@ -216,13 +216,13 @@ for command, (create_command, help) in cdktf_commands.items():
 
 def initialise_settings(app, environment, settings_model, dry_run=False):
     """Interactive CLI prompts to initialise or update paramater store settings"""
-    settings = settings_model.model_construct(app, environment)
-    for key, field in settings.model_fields.items():
+    settings = settings_model.model_dict(app, environment)
+    for key, field in settings_model.model_fields.items():
         if field.exclude:
             continue
         # Default to the current value, which is either from paramstore
         # or automatically applied as a setting default
-        current_value = getattr(settings, key, None)
+        current_value = settings.get(key, None)
 
         if current_value is None:
             if field.default is not PydanticUndefined:
@@ -284,8 +284,8 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
                         print(", ".join([x["msg"] for x in e.errors()]))
                     value = None
                     continue
+        settings[key] = value
         print()
-        setattr(settings, key, value)
 
     settings = settings.model_validate(settings)
 
@@ -392,9 +392,9 @@ def delete_settings(app, environment, settings_model, dry_run=False):
     print("Determining list of settings to delete...")
     to_delete = []
     backup = {}
-    for param in fetch_settings(namespace):
-        to_delete.append(param["Name"])
-        backup[param["Name"]] = param["Value"]
+    for key, value in settings_model.fetch_settings(app, environment).items():
+        to_delete.append(f"{namespace}{key}")
+        backup[key] = value
 
     if not len(to_delete):
         print(f"Nothing settings found to delete under {namespace}")
