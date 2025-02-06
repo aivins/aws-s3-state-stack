@@ -60,7 +60,9 @@ class ParameterStoreSettingsSource(PydanticBaseSettingsSource):
     def __call__(self):
         params = self.fetch_params()
         settings = {}
-        for field_name, _ in self.settings_cls.model_fields.items():
+        for field_name, _ in self.settings_cls.get_model_fields(
+            include_computed=True
+        ).items():
             if field_name in params:
                 settings[field_name] = params[field_name]
         return settings

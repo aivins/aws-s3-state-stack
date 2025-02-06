@@ -9,6 +9,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from cdktf_helpers.utils import extract_default
+
 
 def computed_field(arg, description="x", json_schema_extra={}, **kwargs):
     @functools.wraps(pydantic_computed_field)
@@ -55,19 +57,18 @@ class AppSettings(BaseSettings):
             {"app": app, "environment": environment}
         )
         settings = {}
-        for field_name, field in cls.model_fields.items():
+        for field_name, field in cls.get_model_fields(
+            include_hidden=True, include_computed=True
+        ).items():
             value = source_data.get(field_name, None)
             if value is None:
-                if field.default is not PydanticUndefined:
-                    value = field.default
-                elif field.default_factory:
-                    value = field.default_factory()
+                value = extract_default(field)
             settings[field_name] = value
         return settings
 
     @classmethod
-    def get_model_fields(cls, include_computed=False):
-        hidden_fields = cls.get_hidden_fields()
+    def get_model_fields(cls, include_hidden=False, include_computed=False):
+        hidden_fields = [] if include_hidden else cls.get_hidden_fields()
         model_fields = {
             **cls.model_fields,
             **(cls.model_computed_fields if include_computed else {}),
