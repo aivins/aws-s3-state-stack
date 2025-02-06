@@ -487,7 +487,7 @@ def entrypoint():
         main()
     except (UnauthorizedSSOTokenError, NoCredentialsError):
         print(
-            "Looks like you don't have a valid AWS SSO session. "
+            "Looks like you don't have a valid AWS session. "
             "Start one with `aws sso login` or manually configure your "
             "environment before trying again."
         )
