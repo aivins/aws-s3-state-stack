@@ -47,9 +47,9 @@ class AppSettings(BaseSettings):
 
     @classmethod
     def model_dict(cls, app: str, environment: str, **kwargs):
-        return cls.model_construct(
-            app=app, environment=environment, **kwargs
-        ).model_dump(exclude=["namespace"])
+        settings = cls.model_construct(app=app, environment=environment, **kwargs)
+        breakpoint()
+        return {k: getattr(settings, k, None) for k in cls.model_fields}
 
     @classmethod
     def get_model_fields(cls, include_computed=False):

@@ -217,6 +217,7 @@ for command, (create_command, help) in cdktf_commands.items():
 def initialise_settings(app, environment, settings_model, dry_run=False):
     """Interactive CLI prompts to initialise or update paramater store settings"""
     settings = settings_model.model_dict(app, environment)
+    breakpoint()
     hidden_fields = settings_model.get_hidden_fields()
     for key, field in settings_model.model_fields.items():
         if key in hidden_fields:
@@ -271,7 +272,7 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
                         # If the field is a resource, then the user
                         # should have supplied an ID
                         value = field.annotation(id=value)
-                    if field_is_list:
+                    elif field_is_list:
                         # If it's a list, we expect a JSON formatted string
                         value = validator.validate_json(value)
                     else:
@@ -288,6 +289,7 @@ def initialise_settings(app, environment, settings_model, dry_run=False):
         settings[key] = value
         print()
 
+    breakpoint()
     settings = settings_model.model_validate(settings)
 
     # Update paramstore with new values
@@ -326,6 +328,8 @@ def show_settings(app, environment, settings_model):
     ]
 
     settings = settings_model.model_dict(app, environment)
+
+    breakpoint()
 
     def wrap(text, width):
         return "\n".join(textwrap.wrap(text, width=width))

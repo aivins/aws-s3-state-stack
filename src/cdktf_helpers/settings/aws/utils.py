@@ -53,4 +53,4 @@ def ensure_backend_resources(s3_bucket_name, dynamodb_table_name):
 
 
 def tags(obj):
-    return {t["Key"]: t["Value"] for t in obj.resource.tags}
+    return {t["Key"]: t["Value"] for t in obj.tags}

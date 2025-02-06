@@ -66,6 +66,7 @@ class AwsAppSettings(NestedResourceMixin, AppSettings):
         *args,
         **kwargs,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        breakpoint()
         return (init_settings, ParameterStoreSettingsSource(settings_cls))
 
     @classmethod
@@ -80,6 +81,7 @@ class AwsAppSettings(NestedResourceMixin, AppSettings):
                 field_name = param["Name"][len(prefix) :]
                 value = json.loads(param["Value"])
                 settings[field_name] = value
+        breakpoint()
         return settings
 
     def serialize_value(self, field_name):

@@ -1,8 +1,12 @@
 from .defaults import (
+    default_private_subnet_ids,
     default_private_subnets,
+    default_public_subnet_ids,
     default_public_subnets,
+    default_subnet_ids,
     default_subnets,
     default_vpc,
+    default_vpc_id,
 )
 from .fields import (
     HostedZoneField,
@@ -28,13 +32,13 @@ from .utils import (
 
 exported_defaults = [
     default_private_subnets,
-    default_private_subnets,
-    default_public_subnets,
     default_public_subnets,
     default_subnets,
-    default_subnets,
     default_vpc,
-    default_vpc,
+    default_vpc_id,
+    default_subnet_ids,
+    default_private_subnet_ids,
+    default_public_subnet_ids,
 ]
 
 exported_fields = [
